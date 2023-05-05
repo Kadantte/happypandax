@@ -66,6 +66,10 @@ html, body {
     max-height: 100%;
 }
 
+.max-h-screen {
+    max-height: 100vh;
+}
+
 .user-select-none {
     -webkit-user-select: none;
 	-moz-user-select: none;
@@ -79,9 +83,23 @@ html, body {
     left: 0;
     bottom: 0;
     right: 0;
-    padding-left: 70px;
+    padding-left: 5px;
     padding-right: 5px;
     padding-bottom: 20px;
+
+}
+
+:not(.sidebar-hidden).sidebar-left #drawer, :not(.sidebar-hidden).sidebar-left #drawer  {
+    padding-left: 70px;
+}
+
+:not(.sidebar-hidden).sidebar-right #drawer, :not(.sidebar-hidden).sidebar-right #drawer  {
+    padding-right: 70px;
+}
+
+#bottom_zone.fluid {
+    padding-left: 5px;
+    padding-right: 5px;
 }
 
 #bottom_zone {
@@ -92,9 +110,13 @@ html, body {
     height: 200px;
     position: absolute;
     bottom: 0;
-    left: 70px;
-    right: 5px;
+    left: 5px;
+    right: 70px;
     bottom: 20px;
+}
+
+#bottom_zone.fluid > div {
+    right: 5px;
 }
 
 #bottom_zone > div > .item {
@@ -155,7 +177,7 @@ html, body {
     width: 100%;
 }
 
-.sticky-page-sidebar.right {
+.sticky-page-sidebar.right:not(.mobile) {
     padding-right: 60px;
 }
 
@@ -224,4 +246,29 @@ html, body {
 
 .z-index-1 {
     z-index: 1;
+}
+
+/* slightly transparent fallback */
+.backdrop-blur {
+    background-color: rgba(255, 255, 255, .9);
+  }
+  
+  /* if backdrop support: very transparent and blurred */
+  @supports ((-webkit-backdrop-filter: none) or (backdrop-filter: none)) {
+    .backdrop-blur {
+      background-color: rgba(255, 255, 255, .5);
+      -webkit-backdrop-filter: blur(2em);
+      backdrop-filter: blur(2em);
+    }
+  }
+
+.centered-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.visibility-hidden {
+    visibility: hidden;
 }

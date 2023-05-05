@@ -1,0 +1,172 @@
+name: CI for client
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+      - dev
+env:
+  NODE_VERSION: "18.14.0"
+  HAPPYPANDAX_TOKEN: ${{ secrets.HAPPYPANDAX_TOKEN }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: Test client
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+          - windows-2022
+          - macos-11
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
+      - name: Setup yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@stable --activate
+
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "dir=$(yarn config get cacheFolder)" >> $GITHUB_OUTPUT
+      - name: Cache yarn cache
+        uses: actions/cache@v3
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run tests
+        run: yarn run:client test
+
+  build:
+    name: Build client
+    # needs:
+    #   - test
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+          - windows-2022
+          - macos-11
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Setup yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@stable --activate
+
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "dir=$(yarn config get cacheFolder)" >> $GITHUB_OUTPUT
+      - name: Cache yarn cache
+        uses: actions/cache@v3
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Build
+        run: |
+          yarn run:client build:css
+          yarn run:client build
+      - name: Store build
+        uses: actions/upload-artifact@v3
+        with:
+          name: build
+          path: |
+            packages/client/.next
+            packages/client/public
+
+  package:
+    name: Package client
+    needs:
+      - build
+    strategy:
+      matrix:
+        os:
+          - ubuntu-22.04
+          - windows-2022
+          - macos-11
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Load build
+        uses: actions/download-artifact@v3
+        with:
+          name: build
+          path: packages/client
+      - name: Display structure of files
+        run: ls -R
+        working-directory: packages/client
+      - name: Install global dependencies
+        run: |
+          npm install -g rimraf cross-env
+      - name: Install production dependencies
+        run: yarn workspaces focus --all --production && rm -rf "$(yarn cache clean)"
+      - name: Package
+        run: yarn run:client package
+
+      - name: Set release name
+        run: |
+          echo "HPX_VERSION=$(node -p "require('./packages/client/package.json').version")" >> $GITHUB_ENV
+          echo "RELEASE_NAME=happypandax_client-$(node -p "require('./packages/client/package.json').version")" >> $GITHUB_ENV
+      - name: Tag release
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag -a ${{ env.RELEASE_NAME }} -m "Release ${{ env.RELEASE_NAME }}" || true
+          git push --quiet --tags || true
+      - name: Archive release
+        run: |
+          cd packages/client/dist
+          if [ "${{ matrix.os }}" == "windows-2022" ]; then
+            7z a -tzip ${{ env.RELEASE_NAME }}-${{ matrix.os }}.zip ./*
+          else
+            tar -czf ../${{ env.RELEASE_NAME }}-${{ matrix.os }}.tar.gz *
+          fi
+
+      - name: Publish
+        uses: xresloader/upload-to-github-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.HAPPYPANDAX_TOKEN }}
+        with:
+          file: "**/*.zip;**/*.tar.gz"
+          tag_name: client-v${{ env.HPX_VERSION }}
+          draft: true
+          overwrite: true
+          prerelease: true

@@ -3,9 +3,9 @@ import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import { Card, Image, Label, Segment } from 'semantic-ui-react';
 
-import t from '../../misc/lang';
-import { FieldPath, ServerParody } from '../../misc/types';
-import { urlstring } from '../../misc/utility';
+import t from '../../client/lang';
+import { FieldPath, ServerParody } from '../../shared/types';
+import { urlstring } from '../../shared/utility';
 import styles from './Item.module.css';
 
 export type ParodyCardLabelData = DeepPick<
@@ -37,7 +37,8 @@ export default function ParodyCardLabel({
         'tiny-size',
         'parody',
         props.className
-      )}>
+      )}
+    >
       <Image
         floated="left"
         size="mini"
@@ -57,7 +58,9 @@ export default function ParodyCardLabel({
             href={urlstring('/library', {
               q: `parody:"${data.preferred_name.name}"`,
             })}
-            passHref>
+            passHref
+            legacyBehavior
+          >
             <Label
               size="small"
               empty

@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from 'react';
 
-import { ItemType } from '../../misc/enums';
-import t from '../../misc/lang';
-import { FieldPath, ItemSize, ServerCollection } from '../../misc/types';
+import t from '../../client/lang';
+import { ItemType } from '../../shared/enums';
+import { FieldPath, ItemSize, ServerCollection } from '../../shared/types';
 import { FavoriteLabel, GalleryCountLabel } from '../dataview/Common';
 import {
   ActivityLabel,
@@ -80,7 +80,7 @@ export function CollectionCard({
           </ItemLabel>,
           <ItemLabel key="icons" x="right" y="top">
             {!!data?.metatags?.inbox && <InboxIconLabel />}
-            <ActivityLabel />
+            <ActivityLabel type={ItemType.Collection} data={data} />
           </ItemLabel>,
           <ItemLabel key="menu" x="right" y="bottom">
             {horizontal && (
@@ -103,7 +103,8 @@ export function CollectionCard({
           <ItemCardImage src={data?.profile}>{children}</ItemCardImage>
         ),
         [data.profile]
-      )}>
+      )}
+    >
       <ItemCardContent title={data?.name ?? ''}></ItemCardContent>
     </ItemCard>
   );

@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from 'react';
 
-import { ItemType } from '../../misc/enums';
-import t from '../../misc/lang';
-import { FieldPath, ItemSize, ServerPage } from '../../misc/types';
+import t from '../../client/lang';
+import { ItemType } from '../../shared/enums';
+import { FieldPath, ItemSize, ServerPage } from '../../shared/types';
 import { FavoriteLabel, PageNumberLabel } from '../dataview/Common';
 import {
   ActivityLabel,
@@ -92,7 +92,8 @@ export function PageCard({
           <ItemCardImage src={data?.profile}>{children}</ItemCardImage>
         ),
         [data.profile]
-      )}></ItemCard>
+      )}
+    ></ItemCard>
   );
 }
 

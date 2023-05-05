@@ -1,5 +1,5 @@
-import { ClientError } from '../misc/error';
-import { ServiceType } from './constants';
+import { ServiceType } from '../server/constants';
+import { ClientError } from '../shared/error';
 
 import type FairyService from './fairy';
 import type PixieService from './pixie';
@@ -10,6 +10,8 @@ export class Service {
   constructor(type: ServiceType) {
     this.type = type;
   }
+
+  async init(locator: ServiceLocator) {}
 }
 
 type ServiceTypeMap = {
@@ -20,6 +22,12 @@ type ServiceTypeMap = {
 
 export class ServiceLocator {
   #instances: { [key in ServiceType]?: Service } = {};
+
+  init(locator: ServiceLocator) {
+    return Promise.all(
+      Object.values(this.#instances).map((s) => s?.init(locator))
+    );
+  }
 
   set<T extends Service>(instance: T) {
     this.#instances[instance.type] = instance;

@@ -7,9 +7,9 @@ import { Container, Menu } from 'semantic-ui-react';
 import { DataContext } from '../../client/context';
 import { useSetupDataState } from '../../client/hooks/item';
 import { useRefEvent } from '../../client/hooks/utils';
-import { ItemType } from '../../misc/enums';
-import { ServerGallery, ServerItemWithProfile } from '../../misc/types';
-import { animateCSS } from '../../misc/utility';
+import { animateCSS } from '../../client/utility';
+import { ItemType } from '../../shared/enums';
+import { ServerGallery, ServerItemWithProfile } from '../../shared/types';
 import { AppState } from '../../state';
 import MainMenu, { ConnectionItem, MenuItem } from '../Menu';
 import styles from './ItemLayout.module.css';
@@ -116,7 +116,8 @@ export function LabelField({
       <div
         className={classNames(styles.label_children, {
           [styles.label_children_padded]: padded,
-        })}>
+        })}
+      >
         {children}
       </div>
     </div>
@@ -156,12 +157,14 @@ export function ItemMenu({
                 bordered: true,
                 inverted: true,
               }}
-              title={`This item is in your reading queue`}></MenuItem>
+              title={`This item is in your reading queue`}
+            ></MenuItem>
           )}
           {data?.metatags?.inbox && (
             <MenuItem
               icon={{ name: 'inbox', bordered: true, inverted: true }}
-              title={`This item is in your inbox`}></MenuItem>
+              title={`This item is in your inbox`}
+            ></MenuItem>
           )}
           {!data?.metatags?.read && (
             <MenuItem
@@ -170,7 +173,8 @@ export function ItemMenu({
                 bordered: true,
                 inverted: true,
               }}
-              title={`This item has not been read yet`}></MenuItem>
+              title={`This item has not been read yet`}
+            ></MenuItem>
           )}
           <ConnectionItem />
         </Menu.Menu>
@@ -216,6 +220,41 @@ export function ItemHeaderParallax({
           />
         </ParallaxDiv>
       </Container>
+    </div>
+  );
+}
+
+export function BlurryBackgroundContainer({
+  data,
+  ...props
+}: React.ComponentProps<typeof Container> & {
+  data?: DeepPick<ServerItemWithProfile, 'id' | 'profile'>;
+}) {
+  const containerRef = useRef<HTMLDivElement>();
+  const imgRef = useRef<HTMLImageElement>(new Image());
+  const colorThief = useMemo(() => new ColorThief(), []);
+
+  useEffect(() => {
+    const setColor = () => {
+      const c = colorThief.getColor(imgRef.current);
+      containerRef.current.style.backgroundColor = `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+    };
+    imgRef.current.src = data.profile.data;
+    if (imgRef.current.complete) {
+      setColor();
+    } else {
+      imgRef.current.onload = setColor;
+    }
+  }, [data?.id]);
+
+  return (
+    <div className={styles.blurry_background_parent}>
+      <div
+        ref={containerRef}
+        className={styles.blurry_background_container}
+        style={{ backgroundImage: `url(${data.profile.data})` }}
+      />
+      <Container {...props} />
     </div>
   );
 }

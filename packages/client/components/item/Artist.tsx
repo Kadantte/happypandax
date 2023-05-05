@@ -4,10 +4,11 @@ import { Card, Icon, Image, Label, Segment } from 'semantic-ui-react';
 
 import { DataContext } from '../../client/context';
 import { useSetupDataState } from '../../client/hooks/item';
-import { ItemType } from '../../misc/enums';
-import t from '../../misc/lang';
-import { FieldPath, ServerArtist } from '../../misc/types';
-import { urlstring } from '../../misc/utility';
+import t from '../../client/lang';
+import { getLibraryQuery } from '../../client/utility';
+import { ItemType, ViewType } from '../../shared/enums';
+import { FieldPath, ServerArtist } from '../../shared/types';
+import { urlstring } from '../../shared/utility';
 import { FavoriteLabel, FolllowLabel } from '../dataview/Common';
 
 export type ArtistCardLabelData = DeepPick<
@@ -48,7 +49,8 @@ export default function ArtistCardLabel({
         as={Segment}
         size="tiny"
         color="blue"
-        className={classNames('default-card', props.className)}>
+        className={classNames('default-card', props.className)}
+      >
         <Card.Content>
           <Image
             floated="left"
@@ -89,9 +91,16 @@ export default function ArtistCardLabel({
           <Card.Meta className="clearfix">
             <Link
               href={urlstring('/library', {
-                q: `artist:"${data.preferred_name.name}"`,
+                ...getLibraryQuery({
+                  query: `artist:"${data.preferred_name.name}"`,
+                  view: ViewType.All,
+                  favorites: false,
+                  filter: 0,
+                }),
               })}
-              passHref>
+              passHref
+              legacyBehavior
+            >
               <Label
                 size="small"
                 empty

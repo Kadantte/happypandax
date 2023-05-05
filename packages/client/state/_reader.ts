@@ -1,5 +1,5 @@
-import { ImageSize, ItemFit, ReadingDirection } from '../misc/enums';
-import { ReaderData } from '../misc/types';
+import { ImageSize, ItemFit, ReadingDirection } from '../shared/enums';
+import { ReaderData } from '../shared/types';
 import StateBlock, { defineAtom } from './_base';
 import { cookieEffect, localStorageEffect } from './_statehelpers';
 
@@ -24,6 +24,22 @@ export default class _ReaderState extends StateBlock {
     {
       default: 0 as ImageSize,
       effects_UNSTABLE: [localStorageEffect('reader_scaling')],
+    },
+    true
+  );
+
+  static autoScroll = defineAtom(
+    {
+      default: false,
+      effects_UNSTABLE: [localStorageEffect('reader_scroll')],
+    },
+    true
+  );
+
+  static autoScrollSpeed = defineAtom(
+    {
+      default: 50,
+      effects_UNSTABLE: [localStorageEffect('reader_scroll_speed')],
     },
     true
   );
@@ -64,6 +80,11 @@ export default class _ReaderState extends StateBlock {
 
   static wheelZoom = defineAtom(
     { default: false, effects_UNSTABLE: [localStorageEffect('reader_zoom')] },
+    true
+  );
+
+  static blurryBg = defineAtom(
+    { default: true, effects_UNSTABLE: [localStorageEffect('blurry_bg')] },
     true
   );
 

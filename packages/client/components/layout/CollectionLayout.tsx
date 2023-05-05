@@ -1,19 +1,13 @@
 import classNames from 'classnames';
 import { useRecoilValue } from 'recoil';
-import {
-  Container,
-  Divider,
-  Header,
-  Icon,
-  Image,
-  Segment,
-} from 'semantic-ui-react';
+import { Divider, Header, Icon, Image, Segment } from 'semantic-ui-react';
 
 import { DataContext } from '../../client/context';
 import { useImage, useSetupDataState } from '../../client/hooks/item';
-import { ItemType } from '../../misc/enums';
-import t from '../../misc/lang';
-import { FieldPath, ServerCollection } from '../../misc/types';
+import { useBreakpoints } from '../../client/hooks/ui';
+import t from '../../client/lang';
+import { ItemType } from '../../shared/enums';
+import { FieldPath, ServerCollection } from '../../shared/types';
 import { AppState } from '../../state';
 import {
   CategoryLabel,
@@ -25,7 +19,11 @@ import {
   UrlList,
 } from '../dataview/Common';
 import { CollectionMenu } from '../item/Collection';
-import { LabelField, LabelFields } from './ItemLayout';
+import {
+  BlurryBackgroundContainer,
+  LabelField,
+  LabelFields,
+} from './ItemLayout';
 import styles from './ItemLayout.module.css';
 
 export type CollectionHeaderData = DeepPick<
@@ -60,6 +58,8 @@ export function CollectionItemHeader({
 }: {
   data: CollectionHeaderData;
 }) {
+  const { isMobileMax } = useBreakpoints();
+
   const blur = useRecoilValue(AppState.blur);
 
   const { data, dataContext } = useSetupDataState({
@@ -72,10 +72,18 @@ export function CollectionItemHeader({
 
   return (
     <DataContext.Provider value={dataContext}>
-      <Container>
-        <Segment basic className="no-margins no-top-padding no-right-padding">
-          <div className={classNames(styles.header_content)}>
-            <div className={styles.cover_column}>
+      <BlurryBackgroundContainer data={data}>
+        <Segment
+          className={classNames('no-margins no-top-padding', {
+            'no-right-padding': !isMobileMax,
+          })}
+        >
+          <div
+            className={classNames(styles.header_content, {
+              [styles.column]: isMobileMax,
+            })}
+          >
+            <div className={classNames(styles.cover_collection)}>
               <Image
                 centered
                 rounded
@@ -125,7 +133,7 @@ export function CollectionItemHeader({
             </Segment>
           </div>
         </Segment>
-      </Container>
+      </BlurryBackgroundContainer>
     </DataContext.Provider>
   );
 }

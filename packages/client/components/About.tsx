@@ -6,37 +6,59 @@ import {
   Header,
   Icon,
   Label,
-  List,
   Modal,
-  Progress,
   Segment,
   Tab,
   Table,
 } from 'semantic-ui-react';
 
-import { QueryType, useQueryType } from '../client/queries';
-import { CommandState } from '../misc/enums';
-import t from '../misc/lang';
-import { CommandProgress } from '../misc/types';
-import { dateFromTimestamp } from '../misc/utility';
-import { EmptySegment } from './Misc';
+import t from '../client/lang';
+import { useQueryType } from '../client/queries';
+import { QueryType } from '../shared/query';
+import { CommandProgress } from '../shared/types';
+import { useGlobalValue } from '../state/global';
+import { EmptySegment } from './misc';
+import { ActivityList } from './misc/ActivityList';
+import { ModalWithBack } from './misc/BackSupport';
+import { TrashTabView } from './Trash';
 
 function InfoPane() {
+  const packageJson = useGlobalValue('packageJson');
+  const { data } = useQueryType(QueryType.PROPERTIES, {
+    keys: ['version'],
+  });
+
   return (
     <Grid as={Segment} basic>
       <Grid.Row textAlign="center">
         <Grid.Column>
-          <Label basic>
-            {t`Webclient`} <Label.Detail>1.1.1</Label.Detail>
+          {data?.data?.version?.beta && <Label color="violet">{t`Beta`}</Label>}
+          {data?.data?.version?.alpha && <Label color="red">{t`Alpha`}</Label>}
+          <Label basic color="purple">
+            {data?.data?.version?.name}
           </Label>
           <Label basic>
-            {t`Server`} <Label.Detail>1.1.1</Label.Detail>
+            {t`Webclient`} <Label.Detail>{packageJson?.version}</Label.Detail>
           </Label>
           <Label basic>
-            {t`Database`} <Label.Detail>1.1.1</Label.Detail>
+            {t`Server`}{' '}
+            <Label.Detail>
+              {data?.data?.version?.core?.join?.('.')}
+            </Label.Detail>
           </Label>
           <Label basic>
-            {t`Torrent`} <Label.Detail>1.1.1</Label.Detail>
+            {t`Database`}{' '}
+            <Label.Detail>{data?.data?.version?.db?.join?.('.')}</Label.Detail>
+          </Label>
+          <Label basic>
+            {t`Torrent`}{' '}
+            <Label.Detail>
+              {data?.data?.version?.torrent?.join?.('.')}
+            </Label.Detail>
+          </Label>
+          <Label basic color="grey">
+            {t`#`}
+            {data?.data?.version?.build}
           </Label>
         </Grid.Column>
       </Grid.Row>
@@ -121,13 +143,9 @@ function InfoPane() {
             <Icon name="refresh" />
             {t`Check for updates`}
           </Button>
-          <Button size="small">
-            <Icon name="redo" />
-            {t`Reindex library`}
-          </Button>
-          <Button size="small" floated="right">
+          <Button size="small" basic floated="right">
             <Icon name="settings" />
-            {t`Reset client settings`}
+            {t`Reset web client settings`}
           </Button>
         </Grid.Column>
       </Grid.Row>
@@ -136,92 +154,25 @@ function InfoPane() {
 }
 
 function ActivityPane() {
-  const { data } = useQueryType(QueryType.COMMAND_PROGRESS);
+  const { data } = useQueryType(QueryType.COMMAND_PROGRESS, undefined, {
+    refetchInterval: 1000,
+    refetchOnMount: true,
+  });
 
   return (
     <Segment basic className="small-padding-segment max-400-h">
       {!data?.data?.length && <EmptySegment />}
       {!!data?.data?.length && (
-        <List size="mini">
-          {data.data.map((p: CommandProgress) => (
-            <List.Item key={p.id}>
-              <List.Content>
-                <List.Header>
-                  <span className="right">
-                    <Label size="mini">
-                      {t`ID`}:<Label.Detail>{p.id}</Label.Detail>
-                    </Label>
-                    <Label size="mini" basic color="black">
-                      {t`Status`}:
-                      <Label.Detail>
-                        {p.state === CommandState.failed
-                          ? t`Failed`
-                          : p.state === CommandState.finished
-                          ? t`Finished`
-                          : p.state === CommandState.in_queue
-                          ? t`In Queue`
-                          : p.state === CommandState.in_service
-                          ? t`In Service`
-                          : p.state === CommandState.out_of_service
-                          ? t`Out of Service`
-                          : p.state === CommandState.started
-                          ? t`Started`
-                          : p.state === CommandState.stopped
-                          ? t`Stopped`
-                          : t`Unknown`}
-                      </Label.Detail>
-                    </Label>
-                  </span>
-                  {p.title}
-                </List.Header>
-                <Progress
-                  precision={2}
-                  active
-                  indicating
-                  size="small"
-                  progress="percent"
-                  percent={
-                    p.max
-                      ? undefined
-                      : [
-                          CommandState.finished,
-                          CommandState.stopped,
-                          CommandState.failed,
-                        ].includes(p.state)
-                      ? 100
-                      : 99
-                  }
-                  total={p.max ? p.max : undefined}
-                  value={p.max ? p.value : undefined}
-                  success={
-                    p.max ? undefined : p.state === CommandState.finished
-                  }
-                  autoSuccess={p.max ? true : false}>
-                  {p.subtitle}
-                </Progress>
-                <List.Description className="sub-text">
-                  <List divided horizontal size="mini">
-                    <List.Item>
-                      {dateFromTimestamp(p.timestamp, { relative: true })}
-                    </List.Item>
-                    <List.Item>
-                      <List.Content>{p.text}</List.Content>
-                    </List.Item>
-                  </List>
-                </List.Description>
-              </List.Content>
-            </List.Item>
-          ))}
-        </List>
+        <ActivityList data={data.data as CommandProgress[]} detail />
       )}
     </Segment>
   );
 }
 
-function StatsPane() {
+function TrashPane() {
   return (
     <Segment basic>
-      <EmptySegment />
+      <TrashTabView />
     </Segment>
   );
 }
@@ -261,25 +212,13 @@ export function AboutTab() {
           },
           {
             menuItem: {
-              key: 'statistics',
-              icon: 'bar chart',
-              content: t`Statistics`,
-            },
-            render: () => (
-              <Tab.Pane basic className="no-padding-segment">
-                <StatsPane />
-              </Tab.Pane>
-            ),
-          },
-          {
-            menuItem: {
               key: 'trash',
               icon: 'trash',
               content: t`Trash`,
             },
             render: () => (
               <Tab.Pane basic className="no-padding-segment">
-                <StatsPane />
+                <TrashPane />
               </Tab.Pane>
             ),
           },
@@ -294,8 +233,10 @@ export default function AboutModal({
   className,
   ...props
 }: React.ComponentProps<typeof Modal>) {
+  const debug = useGlobalValue('debug');
+
   return (
-    <Modal
+    <ModalWithBack
       dimmer="inverted"
       closeIcon
       {...props}
@@ -307,6 +248,18 @@ export default function AboutModal({
         </Header>
         <AboutTab />
       </Modal.Content>
+      {debug && (
+        <Segment
+          attached="bottom"
+          textAlign="center"
+          inverted
+          color="violet"
+          tertiary
+          className="no-margins">
+          {t`Running in debug mode`}
+        </Segment>
+      )}
+
       <Segment
         attached="bottom"
         textAlign="center"
@@ -319,6 +272,6 @@ export default function AboutModal({
           Twiddly
         </a>
       </Segment>
-    </Modal>
+    </ModalWithBack>
   );
 }

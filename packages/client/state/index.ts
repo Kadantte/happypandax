@@ -5,6 +5,7 @@ import { RecoilState, SetterOrUpdater, useRecoilState } from 'recoil';
 import AppState from './_app';
 import StateBlock from './_base';
 import DataState from './_data';
+import ImportState from './_import';
 import LibraryState from './_library';
 import MiscState from './_misc';
 import ReaderState from './_reader';
@@ -64,9 +65,15 @@ export function useInitialRecoilValue<T>(state: RecoilState<T>, optional?: T) {
 
 ((...cls: StateBlock[]) => {
   cls.forEach((c) => StateBlock.setup(c));
-})(AppState, LibraryState, DataState, ReaderState, MiscState, SearchState);
-
-console.log(LibraryState.sort.prototype);
+})(
+  AppState,
+  LibraryState,
+  DataState,
+  ReaderState,
+  MiscState,
+  SearchState,
+  ImportState
+);
 
 export function getStateKey(
   atom: { key: string } | ((p) => any),
@@ -83,5 +90,6 @@ export {
   DataState,
   ReaderState,
   MiscState,
+  ImportState,
   SearchState,
 };

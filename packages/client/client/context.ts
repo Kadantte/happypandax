@@ -1,9 +1,14 @@
 import React, { useContext } from 'react';
 
-import { ItemType } from '../misc/enums';
-import { ItemSize, ServerGallery, ServerItem } from '../misc/types';
+import { ItemType } from '../shared/enums';
+import { ItemSize, ServerGallery, ServerItem } from '../shared/types';
 
-export const LibraryContext = React.createContext(undefined);
+export const SidebarDetailsContext = React.createContext(false as boolean);
+export const LibraryContext = React.createContext(false as boolean);
+
+export function useSidebarDetailsContext() {
+  return useContext(SidebarDetailsContext);
+}
 
 export function useLibraryContext() {
   return useContext(LibraryContext);
@@ -36,9 +41,8 @@ export type DataContextT = PartialExcept<
   'key' | 'type'
 >;
 
-export const DataContext = React.createContext<DataContextT>(
-  defaultDataContext
-);
+export const DataContext =
+  React.createContext<DataContextT>(defaultDataContext);
 
 export function useDataContext(): DataContextT {
   return useContext(DataContext);
@@ -66,20 +70,24 @@ export const ReaderContext = React.createContext({
 
 export const ItemContext = React.createContext({
   isDragging: false,
-  activity: false,
-  activityContent: undefined as React.ReactNode,
-  hiddenAction: undefined as boolean,
-  openMenu: false,
-  onMenuClose: undefined as () => void,
+  alternative: false,
+  showMiniActionContent: undefined as boolean,
   size: 'medium' as ItemSize,
+  AlternativeContent: undefined as React.ElementType,
   ActionContent: undefined as React.ElementType,
-  Details: undefined as React.ElementType,
+  Details: undefined as React.ElementType<{
+    data: PartialExcept<ServerItem, 'id'>;
+  }>,
   detailsData: undefined as PartialExcept<ServerItem, 'id'>,
-  labels: [] as React.ReactNode[],
+  labels: undefined as React.ReactNode,
   href: '',
   disableModal: false,
   onDetailsOpen: undefined as () => void,
   hover: false,
   loading: false,
   horizontal: false,
+});
+
+export const NewItemContext = React.createContext({
+  data: ServerItem,
 });

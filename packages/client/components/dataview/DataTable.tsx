@@ -1,6 +1,6 @@
 import { Header, Loader, Table } from 'semantic-ui-react';
 
-import { TextEditor } from '../Misc';
+import { TextEditor } from '../misc/';
 
 export function DataTableItem({
   children,
@@ -27,7 +27,8 @@ export function DataTableItem({
       <Table.Cell
         colSpan={colSpan && !name ? '2' : undefined}
         verticalAlign={verticalAlign}
-        textAlign={textAlign}>
+        textAlign={textAlign}
+      >
         {children}
       </Table.Cell>
     </Table.Row>
@@ -53,7 +54,8 @@ export function DataTable({
       basic="very"
       size={size}
       compact={compact ? 'very' : false}
-      {...props}>
+      {...props}
+    >
       {showDataText && <TextEditor />}
       <Loader active={loading} />
       <Table.Body>{children}</Table.Body>

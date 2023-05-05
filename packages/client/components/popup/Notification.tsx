@@ -2,10 +2,14 @@ import classNames from 'classnames';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useCallback } from 'react';
 import { useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil';
-import { Header, Icon, Popup, Segment } from 'semantic-ui-react';
+import { Header, Icon, Menu, Popup, Segment } from 'semantic-ui-react';
 
+import { GeneralActions } from '../../client/actions/general';
+import t from '../../client/lang';
+import { logout } from '../../client/queries';
 import { AppState } from '../../state';
-import { EmptySegment } from '../Misc';
+import { useGlobalValue } from '../../state/global';
+import { EmptySegment } from '../misc';
 import styles from './Notification.module.css';
 
 export function Notification({
@@ -26,9 +30,8 @@ export function Notification({
       <Header
         size="tiny"
         className="w-full"
-        color={
-          type === 'info' ? 'blue' : type === 'warning' ? 'orange' : 'red'
-        }>
+        color={type === 'info' ? 'blue' : type === 'warning' ? 'orange' : 'red'}
+      >
         <Icon
           name={
             type === 'info'
@@ -71,7 +74,7 @@ export function Notifications() {
 
   return (
     <>
-      {!notifications.length && <EmptySegment />}
+      {!notifications.length && <EmptySegment fluid={false} />}
       {notifications.map((d) => (
         <Notification
           key={d.date?.getTime?.()}
@@ -92,6 +95,13 @@ export function NotificationsPopup({
 }) {
   const setNotificationAlert = useSetRecoilState(AppState.notificationAlert);
 
+  const sameMachine = useGlobalValue('sameMachine');
+  const user = useGlobalValue('user');
+
+  const onLogout = useCallback(() => {
+    GeneralActions.logout();
+  }, []);
+
   return (
     <Popup
       on="click"
@@ -100,7 +110,51 @@ export function NotificationsPopup({
         setNotificationAlert([]);
       }, [])}
       className={classNames('no-padding-segment', styles.notification_group)}
-      trigger={trigger}>
+      trigger={trigger}
+    >
+      <Menu size="tiny" attached="top" secondary>
+        <Menu.Item header>
+          <Icon name="user" color="blue" />
+          {user?.name}
+        </Menu.Item>
+        {sameMachine && (
+          <Popup
+            inverted
+            position="left center"
+            trigger={<Menu.Item icon={<Icon name="home" color="green" />} />}
+            content={t`Connected locally to server`}
+          />
+        )}
+        {!sameMachine && (
+          <Popup
+            inverted
+            position="left center"
+            trigger={
+              <Menu.Item
+                icon={
+                  <Icon.Group>
+                    <Icon name="dont" size="big" color="red" />
+                    <Icon name="home" />
+                  </Icon.Group>
+                }
+              />
+            }
+            content={t`Connected remotely to server`}
+          />
+        )}
+        <Popup
+          inverted
+          position="left center"
+          trigger={
+            <Menu.Item
+              position="right"
+              onClick={onLogout}
+              icon={<Icon name="sign out alternate" />}
+            />
+          }
+          content={t`Logout`}
+        />
+      </Menu>
       <Notifications />
     </Popup>
   );
@@ -121,7 +175,8 @@ export function NotificationAlert({
       context={context}
       position="bottom right"
       positionFixed
-      className="no-padding-segment">
+      className="no-padding-segment"
+    >
       {notificationAlert.map((d) => (
         <Notification
           key={d?.date?.getTime()}

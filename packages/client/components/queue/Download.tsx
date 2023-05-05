@@ -12,23 +12,30 @@ import {
   Label,
   List,
   Modal,
-  Progress,
   Ref,
   Segment,
 } from 'semantic-ui-react';
 
 import { useConfig, useSetting } from '../../client/hooks/settings';
+import t from '../../client/lang';
 import {
   MutatationType,
   QueryType,
   useMutationType,
   useQueryType,
 } from '../../client/queries';
-import { CommandState, DrawerTab, LogType, QueueType } from '../../misc/enums';
-import t from '../../misc/lang';
-import { DownloadHandler, DownloadItem } from '../../misc/types';
+import {
+  CommandState,
+  DrawerTab,
+  LogType,
+  QueueType,
+} from '../../shared/enums';
+import { DownloadHandler, DownloadItem } from '../../shared/types';
 import { AppState } from '../../state';
-import { EmptyMessage, SortableList } from '../Misc';
+import { EmptyMessage } from '../misc';
+import { ModalWithBack } from '../misc/BackSupport';
+import { Progress } from '../misc/Progress';
+import { SortableList } from '../misc/SortableList';
 import { IsolationLabel, OptionField } from '../Settings';
 import { HandlerLabelGroup, HandlerSortableItem, ItemQueueBase } from './index';
 
@@ -57,9 +64,9 @@ function DownloadItemCard({
 
   const color = item.success ? 'green' : 'red';
 
-  if ([CommandState.finished, CommandState.failed].includes(item.state)) {
+  if ([CommandState.Finished, CommandState.Failed].includes(item.state)) {
     lbl = <Icon name={item.success ? 'check' : 'remove'} color={color} />;
-  } else if (item.state === CommandState.stopped) {
+  } else if (item.state === CommandState.Stopped) {
     lbl = <Icon name="remove" />;
   }
 
@@ -81,18 +88,18 @@ function DownloadItemCard({
             {item?.title ? item.url : item.thumbnail_url}
           </Card.Meta>
           <Card.Description>
-            {item.state !== CommandState.in_queue && (
+            {item.state !== CommandState.InQueue && (
               <Progress
-                error={item.state === CommandState.failed}
-                success={item.state === CommandState.finished && item.success}
-                warning={item.state === CommandState.finished && !item.success}
+                error={item.state === CommandState.Failed}
+                success={item.state === CommandState.Finished && item.success}
+                warning={item.state === CommandState.Finished && !item.success}
                 indicating={item.active}
                 percent={item.active ? item.percent : 100}
                 active={item.active}>
                 {lbl}
               </Progress>
             )}
-            {item.state === CommandState.in_queue && (
+            {item.state === CommandState.InQueue && (
               <div className="ui placeholder fluid">
                 <div className="very long line" />
               </div>
@@ -144,7 +151,7 @@ function DownloadSettings(props: React.ComponentProps<typeof Modal>) {
   }, [downloadHandlers]);
 
   return (
-    <Modal dimmer={false} {...props}>
+    <ModalWithBack dimmer={false} {...props}>
       <Modal.Header>{t`Download Settings`}</Modal.Header>
       <Modal.Content>
         <Form>
@@ -234,18 +241,23 @@ function DownloadSettings(props: React.ComponentProps<typeof Modal>) {
           />
         </List>
       </Modal.Content>
-    </Modal>
+    </ModalWithBack>
   );
 }
 
-export function DownloadQueue() {
+export function DownloadQueue({
+  logDefaultVisible,
+  logExpanded,
+}: {
+  logDefaultVisible?: boolean;
+  logExpanded?: boolean;
+}) {
   const drawerTab = useRecoilValue(AppState.drawerTab);
 
   const [active, setActive] = useState(true);
   const [url, setUrl] = useState('');
 
   const ref = useRef<HTMLInputElement>();
-
 
   const refetchEvery = 5000;
 
@@ -311,11 +323,15 @@ export function DownloadQueue() {
         </Form>
       </Segment>
       <ItemQueueBase
+        logDefaultVisible={logDefaultVisible}
+        logExpanded={logExpanded}
         queue_type={QueueType.Download}
         log_type={LogType.Download}
         Settings={DownloadSettings}
         refetch={refetchQueueItems}
         running={queueState?.data?.running}
+        active_size={queueState?.data?.active?.length}
+        queue_size={queueState?.data?.size}
         onActive={setActive}
       />
       <Header size="tiny" textAlign="center" className="no-margins sub-text">
@@ -346,7 +362,6 @@ export function DownloadLabel() {
     QueryType.QUEUE_STATE,
     {
       queue_type: QueueType.Download,
-      include_finished: false,
     },
     {
       refetchInterval: interval,

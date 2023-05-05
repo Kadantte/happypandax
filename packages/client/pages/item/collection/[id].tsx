@@ -1,19 +1,19 @@
-import { GetServerSidePropsResult, NextPageContext, Redirect } from 'next';
-import { Divider, Label } from 'semantic-ui-react';
+import { GetServerSidePropsResult, NextPageContext } from 'next';
+import { Divider } from 'semantic-ui-react';
 
 import {
   CollectionHeaderData,
   collectionHeaderDataFields,
   CollectionItemHeader,
 } from '../../../components/layout/CollectionLayout';
-import { ImageSize, ItemType } from '../../../misc/enums';
-import t from '../../../misc/lang';
-import { ServerCollection } from '../../../misc/types';
-import { urlparse } from '../../../misc/utility';
-import { ServiceType } from '../../../services/constants';
+import { ServiceType } from '../../../server/constants';
+import { ImageSize, ItemType } from '../../../shared/enums';
+import { ServerErrorCode } from '../../../shared/error';
+import { ServerCollection } from '../../../shared/types';
+import { urlparse } from '../../../shared/utility';
 import LibraryPage, {
+  getLibraryArgs,
   getServerSideProps as libraryServerSideProps,
-  libraryArgs,
   PageProps as LibraryPageProps,
 } from '../../library';
 
@@ -27,22 +27,25 @@ interface PageProps extends LibraryPageProps {
 export async function getServerSideProps(
   context: NextPageContext
 ): Promise<GetServerSidePropsResult<PageProps>> {
-  const server = global.app.service.get(ServiceType.Server);
+  const server = await global.app.service
+    .get(ServiceType.Server)
+    .context(context);
 
-  let redirect: Redirect;
+  let redirectUrl = '/library';
+  let redirect = false;
   let r: Unwrap<ReturnType<typeof libraryServerSideProps>>;
 
   const item_id = parseInt(context.query.id as string);
 
   if (isNaN(item_id)) {
-    redirect = { permanent: false, destination: '/library' };
+    redirect = true;
   }
 
-  let collection: PageProps['collection'];
+  let collection: PageProps['collection'] = null;
+
+  const urlQuery = urlparse(context.resolvedUrl);
 
   if (!redirect) {
-    const urlQuery = urlparse(context.resolvedUrl);
-
     const group = server.create_group_call();
 
     server
@@ -61,36 +64,52 @@ export async function getServerSideProps(
         collection = r;
       });
 
-    await group.call();
+    await group.call({ throw_error: false });
 
-    let page = urlQuery.query?.p
-      ? parseInt(urlQuery.query?.p as string, 10)
-      : 1;
-
-    if (isNaN(page)) {
-      page = 1;
+    try {
+      await group.throw_errors();
+    } catch (e) {
+      if (e?.code === ServerErrorCode.DatabaseItemNotFoundError) {
+        redirect = true;
+        redirectUrl = '/404';
+      } else {
+        throw e;
+      }
     }
 
-    const largs = libraryArgs({
-      ctx: context,
-      urlQuery,
-      itemType: ItemType.Collection,
-      relatedType: ItemType.Gallery,
-      itemId: collection?.id,
-      stateKey,
-      page,
-    });
+    if (!redirect) {
+      let page = urlQuery.query?.p
+        ? parseInt(urlQuery.query?.p as string, 10)
+        : 1;
 
-    r = await libraryServerSideProps(context, {
-      ...largs,
-    });
+      if (isNaN(page)) {
+        page = 1;
+      }
+
+      const largs = getLibraryArgs({
+        ctx: context,
+        urlQuery,
+        itemType: ItemType.Collection,
+        relatedType: ItemType.Gallery,
+        itemId: collection?.id,
+        stateKey,
+        page,
+      });
+
+      r = await libraryServerSideProps(context, {
+        ...largs,
+      });
+    }
   }
 
   return {
-    redirect,
+    redirect: redirect
+      ? { permanent: false, destination: redirectUrl }
+      : undefined,
     ...r,
     props: {
       ...r?.props,
+      urlQuery,
       itemType: ItemType.Gallery,
       collection,
     },
@@ -107,14 +126,10 @@ export default function Page({ collection, ...props }: PageProps) {
         itemId: collection?.id,
         itemType: ItemType.Collection,
         relatedType: ItemType.Gallery,
-      }}>
+      }}
+    >
       <CollectionItemHeader data={collection} />
-      <Divider horizontal>
-        <Label>
-          {t`Total count`}
-          <Label.Detail>{collection?.gallery_count}</Label.Detail>
-        </Label>
-      </Divider>
+      <Divider horizontal hidden />
     </LibraryPage>
   );
 }

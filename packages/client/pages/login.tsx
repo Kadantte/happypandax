@@ -1,14 +1,15 @@
 import { GetServerSidePropsResult, NextPageContext } from 'next';
 import { useRouter } from 'next/dist/client/router';
 import { useCallback, useEffect } from 'react';
-import { useRecoilValue, useSetRecoilState } from 'recoil';
+import { useRecoilValue } from 'recoil';
 import { Divider, Grid, Segment } from 'semantic-ui-react';
 
+import t from '../client/lang';
 import { LoginForm } from '../components/Login';
-import { PageTitle } from '../components/Misc';
-import t from '../misc/lang';
-import { ServiceType } from '../services/constants';
+import { PageTitle } from '../components/misc';
+import { ServiceType } from '../server/constants';
 import { AppState } from '../state';
+import { useSetGlobalState } from '../state/global';
 
 interface PageProps {
   next: string;
@@ -17,22 +18,25 @@ interface PageProps {
 export async function getServerSideProps(
   context: NextPageContext
 ): Promise<GetServerSidePropsResult<{}>> {
-  const server = global.app.service.get(ServiceType.Server);
+  const server = await global.app.service
+    .get(ServiceType.Server)
+    .context(context);
   const next = context.query?.next
     ? decodeURIComponent(context?.query?.next as string)
     : undefined;
 
   return {
     props: { next },
-    redirect: server.logged_in
-      ? { permanent: false, destination: next ?? '/library' }
-      : undefined,
+    redirect:
+      server && server.logged_in
+        ? { permanent: false, destination: next ?? '/library' }
+        : undefined,
   };
 }
 
 export default function Page({ next }: PageProps) {
   const home = useRecoilValue(AppState.home);
-  const setLoggedIn = useSetRecoilState(AppState.loggedIn);
+  const setLoggedIn = useSetGlobalState('loggedIn');
 
   const router = useRouter();
 
@@ -48,7 +52,8 @@ export default function Page({ next }: PageProps) {
       <Grid
         className="main-content overflow-hidden"
         centered
-        verticalAlign="middle">
+        verticalAlign="middle"
+      >
         <Grid.Row>
           <Grid.Column
             className="animate__animated vanishIn"
@@ -57,7 +62,8 @@ export default function Page({ next }: PageProps) {
             largescreen="4"
             mobile="15"
             tablet="9"
-            computer="7">
+            computer="7"
+          >
             <div className="mt-neg-25">
               <div className="center-text">
                 <img
@@ -71,8 +77,6 @@ export default function Page({ next }: PageProps) {
                 <LoginForm
                   onSuccess={useCallback(() => {
                     setLoggedIn(true);
-
-                    console.log(next);
 
                     if (next) {
                       // router.replace doesn't work, idk why

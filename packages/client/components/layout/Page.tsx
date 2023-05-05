@@ -1,11 +1,15 @@
 import classNames from 'classnames';
+import { useCallback, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Button, Container, Dimmer, Portal, Sidebar } from 'semantic-ui-react';
+import { useRecoilState, useRecoilValue } from 'recoil';
+import { Button, Container, Dimmer, Sidebar } from 'semantic-ui-react';
 
-import t from '../../misc/lang';
+import { useBreakpoints } from '../../client/hooks/ui';
+import t from '../../client/lang';
+import { AppState } from '../../state';
 import DrawerPortal, { DrawerButton } from '../Drawer';
-import { ScrollUpButton } from '../Misc';
+import { ScrollUpButton } from '../misc';
 import MainSidebar from '../Sidebar';
 
 export function PageSettingsButton(props: React.ComponentProps<typeof Button>) {
@@ -38,18 +42,49 @@ export function BottomZoneItem({
 
 export function BottomZone({
   children,
-  mountNode,
+  fluid,
+  className,
 }: {
   children?: React.ReactNode;
-  mountNode?: HTMLElement;
+  fluid?: boolean;
+  className?: string;
 }) {
   return (
-    <Portal open mountNode={mountNode}>
-      <div id="bottom_zone">
-        <div>{children}</div>
-      </div>
-    </Portal>
+    <div
+      id="bottom_zone"
+      className={classNames(className, {
+        fluid,
+      })}
+    >
+      <div>{children}</div>
+    </div>
   );
+}
+
+function useBodyStyles() {
+  const { isTablet, isMobileMax, isComputer, isWidescreenMonitor } =
+    useBreakpoints();
+  const sidebarPosition = useRecoilValue(AppState.sidebarPosition);
+  const sidebarHidden = useRecoilValue(AppState.sidebarHidden);
+
+  useEffect(() => {
+    const body = document.body;
+    body.classList.toggle('tablet', isTablet);
+    body.classList.toggle('mobile', isMobileMax);
+    body.classList.toggle('computer', isComputer);
+    body.classList.toggle('widescreen', isWidescreenMonitor);
+
+    body.classList.toggle('sidebar-left', sidebarPosition === 'left');
+    body.classList.toggle('sidebar-right', sidebarPosition === 'right');
+    body.classList.toggle('sidebar-hidden', sidebarHidden);
+  }, [
+    isTablet,
+    isMobileMax,
+    isComputer,
+    isWidescreenMonitor,
+    sidebarPosition,
+    sidebarHidden,
+  ]);
 }
 
 export default function PageLayout({
@@ -75,38 +110,91 @@ export default function PageLayout({
   bottomZone?: React.ReactNode;
   children?: React.ReactNode;
 }) {
+  useBodyStyles();
+
+  const drawerButtonPosition = useRecoilValue(AppState.drawerButtonPosition);
+  const { isTabletMax } = useBreakpoints();
+  const [sidebarHidden, setSidebarHidden] = useRecoilState(
+    AppState.sidebarHidden
+  );
+  const [sidebarPosition, setSidebarPosition] = useRecoilState(
+    AppState.sidebarPosition
+  );
+  const sidebarForcePosition = useRecoilValue(AppState.sidebarForcePosition);
+
+  useEffect(() => {
+    if (isTabletMax) {
+      console.debug({ isMobileMax: isTabletMax });
+      setSidebarHidden(isTabletMax);
+    } else {
+      console.debug({ isMobileMax: isTabletMax });
+      setSidebarHidden(false);
+    }
+    if (!sidebarForcePosition) {
+      setSidebarPosition(isTabletMax ? 'right' : 'left');
+    }
+  }, [isTabletMax, sidebarForcePosition]);
+
+  useEffect(() => {
+    if (sidebarForcePosition) {
+      setSidebarPosition(sidebarForcePosition);
+    }
+  }, [sidebarForcePosition]);
+
+  const sidebarEl = (
+    <MainSidebar
+      hidden={sidebarHidden}
+      direction={sidebarPosition}
+      onlyIcons={isTabletMax ? true : undefined}
+      onHide={useCallback(() => {
+        if (isTabletMax) {
+          setSidebarHidden(true);
+        }
+      }, [isTabletMax])}
+    />
+  );
+
+  const innerSidebar = isTabletMax || sidebarPosition === 'right';
+
   return (
     <>
-      <MainSidebar />
+      {!innerSidebar && sidebarEl}
       {menu}
-      <Sidebar.Pusher
-        as={Dimmer.Dimmable}
-        dimmed={dimmed}
-        className={classNames()}>
-        <Dimmer simple active={dimmed} />
-        <DndProvider backend={HTML5Backend}>
+      <DndProvider backend={HTML5Backend}>
+        <Sidebar.Pusher
+          as={Dimmer.Dimmable}
+          dimmed={dimmed}
+          className={classNames()}
+        >
+          {innerSidebar && sidebarEl}
+          <Dimmer simple active={dimmed} />
           {centered && <Container>{children}</Container>}
           {!centered && children}
           <DrawerPortal />
-          <BottomZone>
-            {bottomZone}
-            <BottomZoneItem x="left" y="top" className="flex">
-              {bottomZoneLeft}
-            </BottomZoneItem>
-            <BottomZoneItem x="right" y="top" className="flex">
-              {bottomZoneRight}
-            </BottomZoneItem>
-            <BottomZoneItem x="left" y="bottom">
+        </Sidebar.Pusher>
+        <BottomZone className="pusher" fluid={sidebarHidden}>
+          {bottomZone}
+          <BottomZoneItem x="left" y="top" className="flex">
+            {bottomZoneLeft}
+          </BottomZoneItem>
+          <BottomZoneItem x="right" y="top" className="flex">
+            {bottomZoneRight}
+          </BottomZoneItem>
+          <BottomZoneItem x="left" y="bottom">
+            {drawerButtonPosition !== 'right' && (
               <DrawerButton basic={basicDrawerButton} />
-              {bottomZoneLeftBottom}
-            </BottomZoneItem>
-            <BottomZoneItem x="right" y="bottom">
-              {bottomZoneRightBottom}
-              <ScrollUpButton />
-            </BottomZoneItem>
-          </BottomZone>
-        </DndProvider>
-      </Sidebar.Pusher>
+            )}
+            {bottomZoneLeftBottom}
+          </BottomZoneItem>
+          <BottomZoneItem x="right" y="bottom">
+            {bottomZoneRightBottom}
+            {drawerButtonPosition === 'right' && (
+              <DrawerButton basic={basicDrawerButton} />
+            )}
+            <ScrollUpButton />
+          </BottomZoneItem>
+        </BottomZone>
+      </DndProvider>
     </>
   );
 }

@@ -5,6 +5,7 @@ import {
   Card,
   Checkbox,
   Grid,
+  Header,
   Icon,
   Label,
   List,
@@ -12,15 +13,23 @@ import {
 } from 'semantic-ui-react';
 
 import { useCommand } from '../../client/command';
+import t from '../../client/lang';
 import { MutatationType, useMutationType } from '../../client/queries';
-import t from '../../misc/lang';
-import { FieldPath, ServerFilter } from '../../misc/types';
-import { urlstring } from '../../misc/utility';
-import { LabelAccordion } from '../Misc';
+import { getLibraryQuery } from '../../client/utility';
+import { ViewType } from '../../shared/enums';
+import { FieldPath, ServerFilter } from '../../shared/types';
+import { urlstring } from '../../shared/utility';
+import { LabelAccordion } from '../misc';
 
 export type FilterCardData = DeepPick<
   ServerFilter,
-  'id' | 'name' | 'info' | 'filter' | 'enforce' | 'search_options'
+  | 'id'
+  | 'name'
+  | 'info'
+  | 'filter'
+  | 'enforce'
+  | 'search_options'
+  | 'gallery_count'
 >;
 
 export const filterCardDataFields: FieldPath<ServerFilter>[] = [
@@ -29,6 +38,7 @@ export const filterCardDataFields: FieldPath<ServerFilter>[] = [
   'filter',
   'enforce',
   'search_options',
+  'gallery_count',
 ];
 
 export default function FilterCard({
@@ -55,7 +65,10 @@ export default function FilterCard({
       className={classNames('horizontal', 'default-card', props.className)}>
       <Card.Content>
         <Card.Header>
-          {data.name}
+          {data.name}{' '}
+          <Label size="mini" basic>
+            {data?.gallery_count}
+          </Label>
           <Label size="mini" className="right">
             {t`ID`}
             <Label.Detail>{data.id}</Label.Detail>
@@ -75,7 +88,17 @@ export default function FilterCard({
             title={t`Update`}
             as="a"
           />
-          <Link href={urlstring('/library', { filter: data.id })} passHref>
+          <Link
+            href={urlstring('/library', {
+              ...getLibraryQuery({
+                query: '',
+                view: ViewType.All,
+                favorites: false,
+                filter: data.id,
+              }),
+            })}
+            passHref
+            legacyBehavior>
             <Label
               size="small"
               empty
@@ -86,7 +109,17 @@ export default function FilterCard({
             />
           </Link>
         </Card.Meta>
-        <LabelAccordion label={t`Options`}>
+        {!!data.filter && (
+          <LabelAccordion noPadding basicLabel color="blue" label={t`Filter`}>
+            <Segment
+              basic
+              tertiary
+              className="no-margins medium-padding-segment">
+              {data.filter}
+            </Segment>
+          </LabelAccordion>
+        )}
+        <LabelAccordion noPadding label={t`Options`}>
           <Grid columns="equal">
             <Grid.Row>
               <Grid.Column>

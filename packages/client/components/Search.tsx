@@ -1,8 +1,8 @@
 import classNames from 'classnames';
-import _ from 'lodash';
 import React, {
   useCallback,
   useContext,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -28,16 +28,17 @@ import SwiperCore, { Mousewheel } from 'swiper/core';
 import { Swiper, SwiperSlide } from 'swiper/react';
 
 import { SearchContext } from '../client/context';
-import { Query, QueryType, useQueryType } from '../client/queries';
+import t from '../client/lang';
+import { QueryType, useQueryType } from '../client/queries';
 import { replaceTextAtPosition } from '../client/search_utils';
-import { ItemType } from '../misc/enums';
-import t from '../misc/lang';
+import { ItemType } from '../shared/enums';
 import {
   SearchItem,
   SearchOptions as SearchOptionsType,
   ServerNamespaceTag,
-} from '../misc/types';
+} from '../shared/types';
 import { AppState, SearchState, useInitialRecoilValue } from '../state';
+import { itemColor, itemText } from './item/index';
 import styles from './Search.module.css';
 
 SwiperCore.use([Mousewheel]);
@@ -244,45 +245,49 @@ function SearchResults({
 }) {
   const context = useContext(SearchContext);
 
-  const [data, setData] = useState<SearchItem[]>([]);
+  const [_searchQuery, setSearchQuery] = useState('');
+  const searchQuery = useDeferredValue(_searchQuery);
 
-  const searchItems = useCallback(
-    _.debounce(
-      (query: string, position: number) => {
-        if (query) {
-          const t = replaceTextAtPosition(query, '', position, {
-            quotation: true,
-          });
-
-          const q = query.slice(t.startPosition, t.endPosition);
-
-          Query.get(QueryType.SEARCH_LABELS, {
-            item_types: itemTypes ?? [
-              ItemType.Artist,
-              ItemType.Category,
-              ItemType.Circle,
-              ItemType.Grouping,
-              ItemType.Language,
-              ItemType.Parody,
-              ItemType.NamespaceTag,
-            ],
-            search_query: q.toString(),
-            limit: 25,
-          }).then((r) => {
-            setData(r.data.items);
-          });
-        }
-      },
-      200,
-      { maxWait: 1000 }
-    ),
-    [itemTypes]
+  const { data } = useQueryType(
+    QueryType.SEARCH_LABELS,
+    {
+      search_query: searchQuery,
+      limit: 25,
+      item_types: itemTypes ?? [
+        ItemType.Artist,
+        ItemType.Category,
+        ItemType.Circle,
+        ItemType.Grouping,
+        ItemType.Language,
+        ItemType.Parody,
+        ItemType.NamespaceTag,
+      ],
+    },
+    {
+      enabled: !!searchQuery,
+    }
   );
 
-  useEffect(() => {
-    const target = context.ref.current.querySelector('input');
-    searchItems(context.query, target.selectionStart);
-  }, [context.query]);
+  const searchItems = useCallback((query: string, position: number) => {
+    if (query) {
+      const t = replaceTextAtPosition(query, '', position, {
+        quotation: true,
+      });
+
+      const q = query.slice(t.startPosition, t.endPosition);
+
+      setSearchQuery(q.toString());
+    }
+  }, []);
+
+  useDebounce(
+    () => {
+      const target = context.ref.current.querySelector('input');
+      searchItems(context.query, target.selectionStart);
+    },
+    300,
+    [context.query]
+  );
 
   return (
     <Segment
@@ -299,47 +304,27 @@ function SearchResults({
         selection
         className="no-margins small-padding-segment max-200-h overflow-y-auto">
         {!!context.query &&
-          data?.map?.((i) => {
+          data?.data?.items?.map?.((i) => {
+            const color = itemColor(i.__type__);
+
+            let type = itemText(i.__type__) ?? t`Unknown`;
             let basic = false;
-            let type = t`Unknown`;
-            let text = i?.name as string;
-            let color: React.ComponentProps<typeof Label>['color'];
+            let text = type
+              ? `${type.toLowerCase()}:"${i?.name}"`
+              : (i?.name as string);
+
             switch (i.__type__) {
-              case ItemType.Category: {
-                type = t`Category`;
-                text = `category:"${text}"`;
-                color = 'black';
-                break;
-              }
-              case ItemType.Circle: {
-                type = t`Circle`;
-                text = `circle:"${text}"`;
-                color = 'teal';
-                break;
-              }
               case ItemType.Collection: {
                 type = '';
                 text = `"${text}"`;
                 break;
               }
               case ItemType.Grouping: {
-                type = t`Series`;
                 basic = true;
-                text = `series:"${text}"`;
-                color = 'black';
                 break;
               }
               case ItemType.Language: {
-                type = t`Language`;
-                color = 'blue';
-                text = `language:"${text}"`;
                 basic = true;
-                break;
-              }
-              case ItemType.Parody: {
-                type = t`Parody`;
-                text = `parody:"${text}"`;
-                color = 'violet';
                 break;
               }
             }
@@ -376,7 +361,7 @@ function SearchResults({
             }
           })}
       </List>
-      {(!context.query || !data?.length) && (
+      {(!context.query || !data?.data?.items?.length) && (
         <Header
           textAlign="center"
           className="sub-text no-margins"
@@ -556,7 +541,7 @@ export function ItemSearch({
   fluid,
   transparent = true,
   placeholder,
-  debounce = 1000,
+  debounce = 500,
   defaultValue,
   onSearch,
   showSuggestion,
@@ -585,6 +570,7 @@ export function ItemSearch({
   const ref = useRef<HTMLElement>();
   const refTimeoutId = useRef<NodeJS.Timeout>();
   const [query, setQuery] = useState(defaultValue);
+  const deferredQuery = useDeferredValue(query);
   const [resultsVisible, setResultsVisible] = useState(false);
   const [focused, setFocused] = useState(false);
   const options = useRecoilValue(SearchState.options(stateKey));
@@ -638,7 +624,7 @@ export function ItemSearch({
       }
     },
     debounce,
-    [dynamic, query, onSubmit]
+    [dynamic, onSubmit]
   );
 
   useEffect(() => {
@@ -668,16 +654,18 @@ export function ItemSearch({
       <>
         <div>
           <SearchOptions size={size} />
-          {!!query && <Icon name="remove" link onClick={onClear} />}
+          {!!deferredQuery && <Icon name="remove" link onClick={onClear} />}
         </div>
       </>
     ),
-    [query, onClear]
+    [deferredQuery, onClear]
   );
 
   return (
     <SearchContext.Provider
-      value={useMemo(() => ({ query, stateKey, ref }), [query])}>
+      value={useMemo(() => ({ query: deferredQuery, stateKey, ref }), [
+        deferredQuery,
+      ])}>
       <form
         onSubmit={onSubmit}
         className={classNames({ fullwidth: fluid }, className)}>

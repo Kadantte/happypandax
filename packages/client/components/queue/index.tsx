@@ -1,9 +1,20 @@
+import classNames from 'classnames';
 import { forwardRef, useCallback, useEffect, useState } from 'react';
-import { useQueryClient } from 'react-query';
-import { useSetRecoilState } from 'recoil';
-import { Icon, Label, List, Loader, Menu, Ref } from 'semantic-ui-react';
+import { useRecoilValue, useSetRecoilState } from 'recoil';
+import {
+  Divider,
+  Icon,
+  Label,
+  List,
+  Loader,
+  Menu,
+  Ref,
+} from 'semantic-ui-react';
+
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useSetting } from '../../client/hooks/settings';
+import t from '../../client/lang';
 import {
   getQueryTypeKey,
   MutatationType,
@@ -11,11 +22,12 @@ import {
   useMutationType,
   useQueryType,
 } from '../../client/queries';
-import { LogType, QueueType } from '../../misc/enums';
-import t from '../../misc/lang';
-import { DownloadHandler, MetadataHandler } from '../../misc/types';
+import { LogType, QueueType } from '../../shared/enums';
+import { DownloadHandler, MetadataHandler } from '../../shared/types';
 import { AppState } from '../../state';
-import { ServerLog, SortableItemItem, SortableList } from '../Misc';
+import { ServerLog } from '../misc';
+import { Progress } from '../misc/Progress';
+import { SortableItemItem, SortableList } from '../misc/SortableList';
 
 export function ItemQueueBase({
   Settings,
@@ -23,12 +35,24 @@ export function ItemQueueBase({
   onActive,
   running,
   log_type,
+  queue_size,
+  logDefaultVisible = false,
+  logExpanded,
+  finish_size,
+  percent,
+  active_size,
   queue_type,
   menuItems,
 }: {
   Settings: React.ElementType;
   running: boolean;
   log_type: LogType;
+  logDefaultVisible?: boolean;
+  logExpanded?: boolean;
+  queue_size: number;
+  finish_size: number;
+  percent: number;
+  active_size: number;
   queue_type: QueueType;
   onActive: (boolean) => void;
   refetch: () => Promise<any>;
@@ -37,10 +61,11 @@ export function ItemQueueBase({
   const [runningLoading, setRunningLoading] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
   const [active, setActive] = useState(true);
-  const [logVisible, setLogVisible] = useState(false);
+  const [logVisible, setLogVisible] = useState(logDefaultVisible);
   const [settingsVisible, setSettingsVisible] = useState(false);
 
   const setDrawerSticky = useSetRecoilState(AppState.drawerSticky);
+  const drawerExpanded = useRecoilValue(AppState.drawerExpanded);
 
   const clearQueue = useMutationType(MutatationType.CLEAR_QUEUE, {
     onMutate: () => setClearLoading(true),
@@ -79,6 +104,8 @@ export function ItemQueueBase({
     onActive?.(active);
   }, [active]);
 
+  const _logExpanded = logExpanded ?? drawerExpanded;
+
   return (
     <>
       {!!Settings && (
@@ -113,6 +140,14 @@ export function ItemQueueBase({
           <Loader active={clearLoading} size="small" />
           <Icon name="remove" /> {t`Clear`}
         </Menu.Item>
+        <Menu.Item>
+          <Label color="black">
+            {t`Session`}:
+            <Label.Detail>
+              {queue_size} ⟹ {active_size} ⟹ {finish_size}
+            </Label.Detail>
+          </Label>
+        </Menu.Item>
         <Menu.Menu position="right">
           <Menu.Item
             onClick={useCallback(() => setLogVisible(!logVisible), [
@@ -132,10 +167,21 @@ export function ItemQueueBase({
       {logVisible && (
         <ServerLog
           type={log_type}
-          className="max-100-h no-margins"
+          className={classNames('no-margins', {
+            'max-300-h': _logExpanded,
+            'max-100-h': !_logExpanded,
+          })}
           attached="top"
         />
       )}
+      <Progress
+        size="tiny"
+        className="no-margins"
+        autoSuccess
+        value={percent}
+        total={100}
+      />
+      <Divider hidden horizontal />
     </>
   );
 }
@@ -158,8 +204,6 @@ export const HandlerLabel = forwardRef(function HandlerLabel(
     item?.type === 'metadata' ? 'metadata.disabled' : 'download.disabled',
     []
   );
-
-  console.debug(disabled);
 
   return (
     <Ref innerRef={ref}>

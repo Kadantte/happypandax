@@ -15,17 +15,20 @@ import {
 } from 'semantic-ui-react';
 
 import { useRecentViewedItem } from '../client/hooks/item';
-import { Query, QueryType, useQueryType } from '../client/queries';
-import { DrawerTab, ImageSize, ItemType, QueueType } from '../misc/enums';
-import t from '../misc/lang';
-import { DragItemData, ServerGallery } from '../misc/types';
-import { urlstring } from '../misc/utility';
+import { useHijackHistory } from '../client/hooks/ui';
+import t from '../client/lang';
+import { useQueryType } from '../client/queries';
+import { DrawerTab, ImageSize, ItemType, QueueType } from '../shared/enums';
+import { QueryType } from '../shared/query';
+import { DragItemData, ServerGallery } from '../shared/types';
+import { urlstring } from '../shared/utility';
 import { AppState } from '../state';
 import GalleryCard, {
   GalleryCardData,
   galleryCardDataFields,
 } from './item/Gallery';
-import { EmptySegment, Slider, SliderElement, Visible } from './Misc';
+import { EmptySegment, Visible } from './misc';
+import { Slider, SliderElement } from './misc/Slider';
 import { DownloadLabel, DownloadQueue } from './queue/Download';
 import { MetadataLabel, MetadataQueue } from './queue/Metadata';
 import ListView from './view/ListView';
@@ -89,24 +92,33 @@ export function QueueBoard({}: {}) {
     [items, readingQueue]
   );
 
+  const f_ids = readingQueue.filter((i) => !items.find((i2) => i2.id === i));
+
   useEffect(() => {
-    const f_ids = readingQueue.filter((i) => !items.find((i2) => i2.id === i));
-    if (f_ids.length) {
-      setLoading(true);
-      Query.get(QueryType.ITEM, {
-        item_id: f_ids,
-        item_type: ItemType.Gallery,
-        profile_options: {
-          size: ImageSize.Small,
-        },
-        fields: galleryCardDataFields,
-      })
-        .then((r) => {
-          setItems([...items, ...(r.data as GalleryCardData[])]);
-        })
-        .finally(() => setLoading(false));
+    setLoading(true);
+  }, [...f_ids]);
+
+  const { data } = useQueryType(
+    QueryType.ITEM,
+    {
+      item_id: f_ids,
+      item_type: ItemType.Gallery,
+      profile_options: {
+        size: ImageSize.Small,
+      },
+      fields: galleryCardDataFields,
+    },
+    {
+      enabled: !!f_ids.length,
+      onSettled: () => setLoading(false),
     }
-  }, [readingQueue]);
+  );
+
+  useEffect(() => {
+    if (data?.data) {
+      setItems([...items, ...(data.data as GalleryCardData[])]);
+    }
+  }, [data]);
 
   const reverse = useCallback(() => {
     setReadingQueue(readingQueue.slice().reverse());
@@ -118,7 +130,7 @@ export function QueueBoard({}: {}) {
     setItems([]);
   }, []);
 
-  const ritems = items.slice().reverse();
+  const ritems = items.slice();
 
   return (
     <Ref innerRef={dropRef}>
@@ -133,7 +145,8 @@ export function QueueBoard({}: {}) {
             className="small-padding-segment small-margins">
             <Link
               href={urlstring(`/item/gallery/${ritems?.[0].id}/page/1`)}
-              passHref>
+              passHref
+              legacyBehavior>
               <Button primary as="a">{t`Start reading`}</Button>
             </Link>
             <Button
@@ -141,17 +154,20 @@ export function QueueBoard({}: {}) {
               onClick={reverse}
               icon={{ name: 'exchange', rotated: 'counterclockwise' }}
             />
-            <Button floated="right" color="red" onClick={clear} icon="remove" />
+            <Button floated="right" color="red" onClick={clear}>
+              {t`Clear`}
+            </Button>
           </Segment>
         )}
         <ListView
           loading={loading}
           basic
           items={ritems}
+          paginationSize="mini"
           tertiary
           className="no-margins no-padding-segment"
           itemRender={GalleryCard}
-          onItemKey={useCallback((i) => i.id, [])}
+          onItemKey={useCallback((i) => i?.id, [])}
         />
         {!items.length && <EmptySegment />}
       </Dimmer.Dimmable>
@@ -178,18 +194,19 @@ export function RecentViewed() {
     }
   );
 
-  console.debug(recentItems);
-
   return (
     <Segment basic>
       {!data?.data?.length && <EmptySegment />}
       {data?.data?.length && (
         <Slider>
-          {(data?.data as ServerGallery[]).map((v) => (
-            <SliderElement key={v.id}>
-              <GalleryCard size="small" data={v} />
-            </SliderElement>
-          ))}
+          {(data?.data as ServerGallery[])
+            .slice()
+            .reverse()
+            .map((v) => (
+              <SliderElement key={v.id}>
+                <GalleryCard size="small" data={v} />
+              </SliderElement>
+            ))}
         </Slider>
       )}
     </Segment>
@@ -204,7 +221,7 @@ function DrawerPane({ children }: { children: React.ReactNode }) {
       basic
       className={classNames('no-padding-segment', {
         ['min-250-h max-250-h']: !drawerExpanded,
-        ['min-400-h max-400-h']: drawerExpanded,
+        ['min-500-h max-500-h']: drawerExpanded,
       })}>
       {children}
     </Tab.Pane>
@@ -324,7 +341,7 @@ export function Drawer({
         onClick={useCallback(() => {
           setDrawerExpanded(!drawerExpanded);
         }, [drawerExpanded])}>
-        <Icon name={drawerExpanded ? 'triangle down' : 'triangle up'} fitted />
+        <Icon name={drawerExpanded ? 'compress' : 'expand'} fitted />
       </Label>
       <Label as="a" attached="top right" onClick={onClose}>
         <Icon name="close" fitted />
@@ -337,6 +354,9 @@ export default function DrawerPortal() {
   const [drawerOpen, setDrawerOpen] = useRecoilState(AppState.drawerOpen);
   const drawerSticky = useRecoilValue(AppState.drawerSticky);
   const onClose = useCallback(() => setDrawerOpen(false), []);
+
+  useHijackHistory(drawerOpen, onClose);
+
   return (
     <TransitionablePortal
       closeOnDocumentClick={!drawerSticky}
@@ -424,9 +444,9 @@ export function DrawerButton({ basic }: { basic?: boolean }) {
         />
       )}
       <Button
-        primary
         circular
         basic={basic}
+        color="violet"
         onClick={useCallback(() => setOpen(true), [])}
         icon="window maximize outline"
         size="small"

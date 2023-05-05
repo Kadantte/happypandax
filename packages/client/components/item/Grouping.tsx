@@ -1,18 +1,19 @@
 import classNames from 'classnames';
 import _ from 'lodash';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRecoilValue } from 'recoil';
 import { Divider, Popup, Segment } from 'semantic-ui-react';
 
-import { ItemType } from '../../misc/enums';
-import t from '../../misc/lang';
+import { useAddToQueue } from '../../client/hooks/item';
+import t from '../../client/lang';
+import { ItemType } from '../../shared/enums';
 import {
   FieldPath,
   ItemSize,
   ServerGallery,
   ServerGrouping,
-} from '../../misc/types';
-import { maskText } from '../../misc/utility';
+} from '../../shared/types';
+import { maskText } from '../../shared/utility';
 import { AppState } from '../../state';
 import { FavoriteLabel, GalleryCountLabel } from '../dataview/Common';
 import GroupingDataTable from '../dataview/GroupingData';
@@ -33,6 +34,7 @@ import {
   ItemCardActionContent,
   ItemCardActionContentItem,
   ItemCardContent,
+  itemColor,
   QueueIconLabel,
   TranslucentLabel,
 } from './index';
@@ -49,10 +51,29 @@ export const groupingCardDataFields: FieldPath<ServerGrouping>[] = [
   ...(galleryCardDataFields.map((f) => 'galleries.' + f) as any),
 ];
 
-function GroupingMenu({}: { hasProgress: boolean; read: boolean }) {
+function GroupingMenu({ data }: { data: GroupingCardData }) {
+  const [menuOpen, setMenuOpen] = useState(undefined);
+
+  const { toggle: toggleToQueue, exists: existsInQueue } = useAddToQueue({
+    data,
+    itemType: ItemType.Grouping,
+  });
+
   return (
-    <ItemMenuLabel>
-      <ItemMenuLabelItem icon="plus">{t`Add to queue`}</ItemMenuLabelItem>
+    <ItemMenuLabel
+      open={menuOpen}
+      onClose={() => setMenuOpen(false)}
+      onOpen={() => setMenuOpen(true)}>
+      <ItemMenuLabelItem
+        icon={existsInQueue ? 'minus' : 'plus'}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleToQueue();
+          setMenuOpen(false);
+        }}>
+        {existsInQueue ? t`Remove from queue` : t`Add to queue`}
+      </ItemMenuLabelItem>
       <ItemMenuLabelItem icon="pencil">{t`Edit`}</ItemMenuLabelItem>
       <ItemMenuLabelItem icon="trash">{t`Delete`}</ItemMenuLabelItem>
     </ItemMenuLabel>
@@ -76,6 +97,7 @@ function GroupingContent({
       <Divider />
       <View
         dynamicRowHeight
+        paginationSize="mini"
         className="no-padding-segment"
         items={data?.galleries}
         size={horizontal ? 'tiny' : 'small'}
@@ -90,20 +112,18 @@ export function GroupingCard({
   size,
   data,
   fluid,
-  draggable,
-  disableModal,
   actionContent,
   horizontal,
+  ...props
 }: {
   size?: ItemSize;
   data: GroupingCardData;
   fluid?: boolean;
-  draggable?: boolean;
   actionContent?: React.ComponentProps<typeof ItemCard>['actionContent'];
-
-  disableModal?: boolean;
   horizontal?: boolean;
-}) {
+} & React.ComponentProps<typeof GalleryCard>) {
+  const color = itemColor(ItemType.Grouping);
+
   const blur = useRecoilValue(AppState.blur);
   const readingQueue = useRecoilValue(AppState.readingQueue);
 
@@ -144,7 +164,7 @@ export function GroupingCard({
               {!!data?.galleries?.every((d) => d?.metatags?.inbox) && (
                 <InboxIconLabel />
               )}
-              <ActivityLabel />
+              <ActivityLabel type={ItemType.Grouping} data={data} />
             </ItemLabel>,
             <ItemLabel key="menu" x="right" y="bottom">
               {horizontal && (
@@ -157,7 +177,7 @@ export function GroupingCard({
                   {data?.gallery_count}
                 </TranslucentLabel>
               )}
-              <GroupingMenu />
+              <GroupingMenu data={data} />
             </ItemLabel>,
           ],
     [horizontal, data, readingQueue]
@@ -173,11 +193,10 @@ export function GroupingCard({
   if (is_gallery) {
     return (
       <GalleryCard
+        {...props}
         size={size}
         data={data.galleries[0]}
         fluid={fluid}
-        draggable={draggable}
-        disableModal={disableModal}
         horizontal={horizontal}
       />
     );
@@ -193,9 +212,9 @@ export function GroupingCard({
       on="click"
       flowing
       as={Segment}
-      color="teal"
+      color={color}
       wide="very"
-      position="bottom left"
+      position="bottom center"
       className="no-padding-segment modal"
       trigger={
         <ItemCard
@@ -205,7 +224,7 @@ export function GroupingCard({
           centered
           className={classNames({
             stacked: is_series,
-            teal: is_series,
+            [color]: is_series,
           })}
           link
           fluid={fluid}

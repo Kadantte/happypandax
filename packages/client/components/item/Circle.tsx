@@ -2,9 +2,11 @@ import classNames from 'classnames';
 import Link from 'next/link';
 import { Card, Icon, Label, Segment } from 'semantic-ui-react';
 
-import t from '../../misc/lang';
-import { FieldPath, ServerArtist, ServerCircle } from '../../misc/types';
-import { urlstring } from '../../misc/utility';
+import t from '../../client/lang';
+import { getLibraryQuery } from '../../client/utility';
+import { ViewType } from '../../shared/enums';
+import { FieldPath, ServerArtist, ServerCircle } from '../../shared/types';
+import { urlstring } from '../../shared/utility';
 
 export type CircleCardLabelData = DeepPick<ServerCircle, 'id' | 'name'>;
 
@@ -25,7 +27,8 @@ export default function CircleCardLabel({
       as={Segment}
       size="tiny"
       color="teal"
-      className={classNames('default-card', props.className)}>
+      className={classNames('default-card', props.className)}
+    >
       <Card.Content>
         <Card.Header>
           <Icon name="group" className="sub-text" />
@@ -38,9 +41,16 @@ export default function CircleCardLabel({
         <Card.Meta>
           <Link
             href={urlstring('/library', {
-              q: `circle:"${data.name}"`,
+              ...getLibraryQuery({
+                query: `circle:"${data.name}"`,
+                view: ViewType.All,
+                favorites: false,
+                filter: 0,
+              }),
             })}
-            passHref>
+            passHref
+            legacyBehavior
+          >
             <Label
               size="small"
               empty

@@ -2,10 +2,12 @@ import { GetServerSidePropsResult, NextPageContext, Redirect } from 'next';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRecoilState } from 'recoil';
-import { Button, Icon } from 'semantic-ui-react';
+import { Button, Container, Icon } from 'semantic-ui-react';
 
 import { ReaderContext } from '../../../../../client/context';
+import { useHijackHistory } from '../../../../../client/hooks/ui';
+import t from '../../../../../client/lang';
+import { getCookies, replaceURL } from '../../../../../client/utility';
 import {
   CollectionCardData,
   collectionCardDataFields,
@@ -17,34 +19,31 @@ import {
 import PageLayout, {
   BottomZoneItem,
 } from '../../../../../components/layout/Page';
-import { PageTitle } from '../../../../../components/Misc';
-import { ItemSort, ItemType } from '../../../../../misc/enums';
-import t from '../../../../../misc/lang';
+import { PageTitle } from '../../../../../components/misc';
+import { ServiceType } from '../../../../../server/constants';
+import ServerService, { GroupCall } from '../../../../../services/server';
+import { ItemSort, ItemType } from '../../../../../shared/enums';
 import {
   ReaderData,
   ServerCollection,
   ServerGallery,
   ServerGrouping,
   ServerPage,
-} from '../../../../../misc/types';
-import {
-  getCookies,
-  JSONSafe,
-  replaceURL,
-  urlparse,
-  urlstring,
-} from '../../../../../misc/utility';
-import { ServiceType } from '../../../../../services/constants';
-import ServerService, { GroupCall } from '../../../../../services/server';
+} from '../../../../../shared/types';
+import { JSONSafe, urlparse, urlstring } from '../../../../../shared/utility';
 import { ReaderState } from '../../../../../state';
+import { useInitialRecoilState } from '../../../../../state/index';
 
-const Reader = dynamic(() => import('../../../../../components/Reader'), {
-  ssr: false,
-});
+const Reader = dynamic(
+  () => import('../../../../../components/reader/Reader'),
+  {
+    ssr: false,
+  }
+);
 
 const ReaderSettingsButton = dynamic(
   () =>
-    import('../../../../../components/Reader').then(
+    import('../../../../../components/reader/ReaderSettings').then(
       (m) => m.ReaderSettingsButton
     ),
   {
@@ -54,7 +53,7 @@ const ReaderSettingsButton = dynamic(
 
 const ReaderAutoNavigateButton = dynamic(
   () =>
-    import('../../../../../components/Reader').then(
+    import('../../../../../components/reader/Misc').then(
       (m) => m.ReaderAutoNavigateButton
     ),
   {
@@ -62,8 +61,21 @@ const ReaderAutoNavigateButton = dynamic(
   }
 );
 
+const ReaderAutoScrollButton = dynamic(
+  () =>
+    import('../../../../../components/reader/Misc').then(
+      (m) => m.ReaderAutoScrollButton
+    ),
+  {
+    ssr: false,
+  }
+);
+
 const EndContent = dynamic(
-  () => import('../../../../../components/Reader').then((m) => m.EndContent),
+  () =>
+    import('../../../../../components/reader/EndContent').then(
+      (m) => m.default
+    ),
   {
     ssr: false,
   }
@@ -71,7 +83,9 @@ const EndContent = dynamic(
 
 const PageInfoPortal = dynamic(
   () =>
-    import('../../../../../components/Reader').then((m) => m.PageInfoPortal),
+    import('../../../../../components/reader/Misc').then(
+      (m) => m.PageInfoPortal
+    ),
   {
     ssr: false,
   }
@@ -94,7 +108,9 @@ interface PageProps {
 export async function getServerSideProps(
   context: NextPageContext
 ): Promise<GetServerSidePropsResult<PageProps>> {
-  const server = global.app.service.get(ServiceType.Server);
+  const server = await global.app.service
+    .get(ServiceType.Server)
+    .context(context);
 
   let redirect: Redirect;
 
@@ -293,16 +309,23 @@ export default function Page(props: PageProps) {
     );
   }, [number]);
 
-  const [infoOpen, setInfoOpen] = useRecoilState(
-    ReaderState.pageInfoOpen(stateKey)
+  const [infoOpen, setInfoOpen] = useInitialRecoilState(
+    ReaderState.pageInfoOpen(stateKey),
+    false
+  );
+
+  useHijackHistory(
+    infoOpen,
+    useCallback(() => setInfoOpen(false), [])
   );
 
   return (
     <ReaderContext.Provider
-      value={useMemo(() => ({ item: props.item, stateKey }), [
-        props.item,
-        stateKey,
-      ])}>
+      value={useMemo(
+        () => ({ item: props.item, stateKey }),
+        [props.item, stateKey]
+      )}
+    >
       <PageLayout
         basicDrawerButton
         bottomZoneLeftBottom={useMemo(
@@ -323,6 +346,7 @@ export default function Page(props: PageProps) {
           return (
             <>
               <BottomZoneItem x="right" y="bottom">
+                <ReaderAutoScrollButton />
                 <ReaderAutoNavigateButton />
                 <ReaderSettingsButton />
               </BottomZoneItem>
@@ -333,7 +357,8 @@ export default function Page(props: PageProps) {
               </BottomZoneItem>
             </>
           );
-        }, [])}>
+        }, [])}
+      >
         <PageTitle title={t`Page ${number}` + ' | ' + props.title} />
         <Reader
           pageCount={props.data.count}
@@ -341,15 +366,18 @@ export default function Page(props: PageProps) {
           initialData={props.data.items as ServerPage[]}
           onPage={useCallback((page: ReaderData) => {
             setNumber(page.number);
-          }, [])}>
-          <EndContent
-            series={props.series}
-            collections={props.collections}
-            nextChapter={props.nextChapter}
-            random={props.randomItem}
-            randomItems={props.randomItems}
-            sameArtist={props.sameArtist}
-          />
+          }, [])}
+        >
+          <Container textAlign="center">
+            <EndContent
+              series={props.series}
+              collections={props.collections}
+              nextChapter={props.nextChapter}
+              random={props.randomItem}
+              randomItems={props.randomItems}
+              sameArtist={props.sameArtist}
+            />
+          </Container>
         </Reader>
         <PageInfoPortal
           container

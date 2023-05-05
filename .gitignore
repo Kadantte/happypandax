@@ -3,6 +3,8 @@
 
 # custom
 **/public/semantic/
+**/*/.env
+**/*/.env.development
 
 *cache
 *.pyproj
@@ -29,6 +31,7 @@ downloads
 .vscode/
 .vs/
 CMakeSettings.json
+
 
 # Build results
 [Dd]ebug/
@@ -249,3 +252,6 @@ _deps
 # vcpkg
 
 vcpkg_installed
+Screenshot 2022-09-01 163235.png
+
+!**/semantic/tasks/build

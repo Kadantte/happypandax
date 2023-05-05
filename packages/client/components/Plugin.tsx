@@ -1,5 +1,4 @@
 import React, { useCallback, useState } from 'react';
-import { useQueryClient } from 'react-query';
 import {
   Button,
   Divider,
@@ -10,6 +9,9 @@ import {
   SemanticCOLORS,
 } from 'semantic-ui-react';
 
+import { useQueryClient } from '@tanstack/react-query';
+
+import t from '../client/lang';
 import {
   getQueryTypeKey,
   MutatationType,
@@ -17,10 +19,9 @@ import {
   useMutationType,
   useQueryType,
 } from '../client/queries';
-import { PluginState } from '../misc/enums';
-import t from '../misc/lang';
-import { PluginData } from '../misc/types';
-import { LabelAccordion } from './Misc';
+import { PluginState } from '../shared/enums';
+import { PluginData } from '../shared/types';
+import { LabelAccordion } from './misc';
 
 function getPluginState(state) {
   return state === PluginState.Installed || state === PluginState.Unloaded
@@ -177,7 +178,10 @@ export function Plugin({ plugin }: { plugin: PluginData }) {
   );
 }
 
-export function PluginAccordion(props: React.ComponentProps<typeof Plugin>) {
+export function PluginAccordion({
+  defaultVisible,
+  ...props
+}: React.ComponentProps<typeof Plugin> & { defaultVisible?: boolean }) {
   let color: SemanticCOLORS = 'grey';
 
   switch (props.plugin?.state) {
@@ -198,6 +202,7 @@ export function PluginAccordion(props: React.ComponentProps<typeof Plugin>) {
   return (
     <LabelAccordion
       clearing
+      defaultVisible={defaultVisible}
       secondary
       basic={false}
       label={props.plugin?.name}
@@ -208,7 +213,12 @@ export function PluginAccordion(props: React.ComponentProps<typeof Plugin>) {
   );
 }
 
-export function Plugins(props: React.ComponentProps<typeof Segment>) {
+export function Plugins({
+  defaultVisibleInactive,
+  ...props
+}: React.ComponentProps<typeof Segment> & {
+  defaultVisibleInactive?: boolean;
+}) {
   const { data, isLoading } = useQueryType(
     QueryType.PLUGINS,
     {},
@@ -223,7 +233,15 @@ export function Plugins(props: React.ComponentProps<typeof Segment>) {
       {data?.data
         ?.sort?.((a, b) => a.name.localeCompare(b.name))
         .map?.((plugin) => (
-          <PluginAccordion key={plugin.id} plugin={plugin} />
+          <PluginAccordion
+            defaultVisible={
+              defaultVisibleInactive
+                ? plugin.state !== PluginState.Enabled
+                : undefined
+            }
+            key={plugin.id}
+            plugin={plugin}
+          />
         ))}
     </Segment>
   );

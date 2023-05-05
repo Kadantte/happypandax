@@ -11,7 +11,7 @@ import React, {
   useState,
 } from 'react';
 import { useDrag } from 'react-dnd';
-import { useRecoilState, useRecoilValue, useSetRecoilState } from 'recoil';
+import { useRecoilValue, useSetRecoilState } from 'recoil';
 import {
   Button,
   Card,
@@ -27,28 +27,111 @@ import {
   Popup,
   Ref,
   Segment,
+  SemanticCOLORS,
 } from 'semantic-ui-react';
 
+import { useItemActivity } from '../../client/activity';
 import {
   DataContext,
   DataContextT,
   ItemContext,
-  LibraryContext,
+  useSidebarDetailsContext,
 } from '../../client/context';
-import { useImage } from '../../client/hooks/item';
-import { ItemType } from '../../misc/enums';
-import t from '../../misc/lang';
+import { useAddToQueue, useImage } from '../../client/hooks/item';
+import t from '../../client/lang';
+import { ItemType } from '../../shared/enums';
 import {
   DragItemData,
   ItemSize,
   ServerItem,
   ServerItemWithProfile,
-} from '../../misc/types';
-import { maskText } from '../../misc/utility';
+} from '../../shared/types';
+import { maskText } from '../../shared/utility';
 import { AppState, LibraryState } from '../../state';
+import { ActivityList } from '../misc/ActivityList';
+import { ModalWithBack } from '../misc/BackSupport';
 import { GalleryCardData } from './Gallery';
 import { GroupingCardData } from './Grouping';
 import styles from './Item.module.css';
+
+export function itemText(type: ItemType): string {
+  let txt = undefined;
+  switch (type) {
+    case ItemType.Gallery: {
+      txt = t`Gallery`;
+      break;
+    }
+    case ItemType.Collection: {
+      txt = t`Collection`;
+      break;
+    }
+    case ItemType.Parody: {
+      txt = t`Parody`;
+      break;
+    }
+    case ItemType.Artist: {
+      txt = t`Artist`;
+      break;
+    }
+    case ItemType.Language: {
+      txt = t`Language`;
+      break;
+    }
+    case ItemType.Circle: {
+      txt = t`Circle`;
+      break;
+    }
+    case ItemType.Grouping: {
+      txt = t`Series`;
+      break;
+    }
+    case ItemType.Category: {
+      txt = t`Category`;
+      break;
+    }
+  }
+
+  return txt;
+}
+
+export function itemColor(type: ItemType) {
+  let color: SemanticCOLORS = undefined;
+  switch (type) {
+    case ItemType.Gallery: {
+      break;
+    }
+    case ItemType.Collection: {
+      color = 'violet';
+      break;
+    }
+    case ItemType.Parody: {
+      color = 'violet';
+      break;
+    }
+    case ItemType.Artist: {
+      color = 'blue';
+      break;
+    }
+    case ItemType.Language: {
+      color = 'blue';
+      break;
+    }
+    case ItemType.Circle: {
+      color = 'teal';
+      break;
+    }
+    case ItemType.Grouping: {
+      color = 'teal';
+      break;
+    }
+    case ItemType.Category: {
+      color = 'black';
+      break;
+    }
+  }
+
+  return color;
+}
 
 export function AddToQueueButton<T extends ItemType>({
   data,
@@ -57,41 +140,10 @@ export function AddToQueueButton<T extends ItemType>({
   data: T extends ItemType.Gallery ? GalleryCardData : GroupingCardData;
   itemType: T;
 }) {
-  const [readingQueue, setReadingQueue] = useRecoilState(AppState.readingQueue);
-
-  const exists =
-    itemType === ItemType.Gallery
-      ? readingQueue.includes(data.id)
-      : data?.galleries?.every?.((g) => readingQueue.includes(g.id));
+  const { exists, toggle } = useAddToQueue<T>({ data, itemType });
 
   return (
-    <Button
-      color="red"
-      size="mini"
-      onClick={useCallback(
-        (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          let list = readingQueue;
-
-          const d =
-            itemType === ItemType.Gallery
-              ? [data]
-              : (data?.galleries as GalleryCardData[]) ?? [];
-
-          d.forEach((g) => {
-            if (exists) {
-              list = list.filter((i) => i !== g.id);
-            } else {
-              list = [...list, g.id];
-            }
-          });
-
-          setReadingQueue(list);
-        },
-        [data, readingQueue]
-      )}>
+    <Button color="red" size="mini" onClick={toggle}>
       <Icon name={exists ? 'bookmark' : 'bookmark outline'} />
       {t`Queue`}
     </Button>
@@ -139,7 +191,7 @@ export function ReadingIconLabel({ percent }: { percent?: number }) {
           size="mini"
           basic
           title={`This item is being read`}>
-          <Icon name="eye" size="large" title={`This item is being read`} />
+          <Icon name="eye" title={`This item is being read`} />
           <span>{Math.round(percent)}%</span>
         </TranslucentLabel>
       )}
@@ -197,29 +249,39 @@ export function ItemMenuLabelItem({
 export function ItemMenuLabel({
   children,
   trigger,
+  onClose,
+  onOpen,
+  open,
 }: {
   children: React.ReactNode | React.ReactNode[];
   trigger?: React.ComponentProps<typeof Popup>['trigger'];
+  open?: React.ComponentProps<typeof Popup>['open'];
+  onClose?: React.ComponentProps<typeof Popup>['onClose'];
+  onOpen?: React.ComponentProps<typeof Popup>['onOpen'];
 }) {
-  const { openMenu, onMenuClose, size } = useContext(ItemContext);
+  const { size } = useContext(ItemContext);
 
   return (
     <Popup
       hoverable
-      onOpen={useCallback((e) => {
-        e?.preventDefault?.();
-        e?.stopPropagation?.();
-      }, [])}
-      on="click"
-      open={openMenu ? openMenu : undefined}
-      hideOnScroll
-      onClose={useCallback(
-        (e) => {
+      onOpen={useCallback(
+        (e, d) => {
           e?.preventDefault?.();
           e?.stopPropagation?.();
-          onMenuClose?.();
+          onOpen?.(e, d);
         },
-        [onMenuClose]
+        [onOpen]
+      )}
+      on="click"
+      open={open}
+      hideOnScroll
+      onClose={useCallback(
+        (e, d) => {
+          e?.preventDefault?.();
+          e?.stopPropagation?.();
+          onClose?.(e, d);
+        },
+        [onClose]
       )}
       position="right center"
       trigger={useMemo(
@@ -234,7 +296,10 @@ export function ItemMenuLabel({
                   ? 'small'
                   : undefined
               }
-              onClick={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                onOpen?.(e, { open: false });
+              }}
             />
           ),
         [trigger]
@@ -260,12 +325,34 @@ export function ItemLabel({
   );
 }
 
-export function ActivityLabel() {
-  return (
-    <TranslucentLabel floating size="mini" circular basic={false}>
-      <Loader inline active size="mini" />
-    </TranslucentLabel>
+export function ActivityLabel({
+  type,
+  data,
+  parentRef,
+}: {
+  type: ItemType;
+  data: DeepPick<ServerItem, 'id'>;
+  parentRef?: React.RefObject<HTMLElement>;
+}) {
+  const [open, setOpen] = useState(false);
+  const activities = useItemActivity(
+    { type, id: data?.id },
+    { ref: parentRef, interval: open ? 1000 : undefined }
   );
+
+  return activities.length ? (
+    <Popup
+      size="tiny"
+      onOpen={() => setOpen(true)}
+      onClose={() => setOpen(false)}
+      trigger={
+        <TranslucentLabel floating size="mini" circular basic={false}>
+          <Loader inline active indeterminate className="double" size="mini" />
+        </TranslucentLabel>
+      }>
+      <ActivityList data={activities} />
+    </Popup>
+  ) : null;
 }
 
 function ItemCardLabels({ children }: { children: React.ReactNode }) {
@@ -283,28 +370,26 @@ function ItemCardLabels({ children }: { children: React.ReactNode }) {
 
 function ItemDetailsModal(props: React.ComponentProps<typeof Modal>) {
   return (
-    <Modal {...props}>
+    <ModalWithBack {...props}>
       <Modal.Content>{props.children}</Modal.Content>
-    </Modal>
+    </ModalWithBack>
   );
 }
 
-function ActivityDimmerContent(): any {
+function AlternativeContent(): any {
   const itemContext = useContext(ItemContext);
 
-  return itemContext.activityContent ? (
-    itemContext.activityContent
-  ) : (
-    <Loader active={itemContext.activity} />
-  );
+  return itemContext.AlternativeContent ? (
+    <itemContext.AlternativeContent />
+  ) : null;
 }
 
-function ActivityDimmer() {
+function AlternativeDimmer() {
   const itemContext = useContext(ItemContext);
 
   return (
-    <Dimmer active={itemContext.activity} className="no-padding-segment">
-      <ActivityDimmerContent />
+    <Dimmer active={itemContext.alternative} className="no-padding-segment">
+      <AlternativeContent />
     </Dimmer>
   );
 }
@@ -333,19 +418,22 @@ export function ItemCardContent({
 
   const onDetailsClose = useCallback(() => setDetailsOpen(false), []);
 
-  const libraryContext = useContext(LibraryContext);
+  const sidebarDetailsContext = useSidebarDetailsContext();
 
   const El = itemContext.horizontal && itemContext.href ? Link : React.Fragment;
 
   return (
-    <El href={itemContext.horizontal ? itemContext.href : undefined} passHref>
+    <El
+      href={itemContext.horizontal ? itemContext.href : undefined}
+      passHref
+      legacyBehavior>
       <Dimmer.Dimmable
         as={itemContext.horizontal && itemContext.href ? 'a' : Card.Content}
         onClick={useCallback(
           (ev) => {
             if (!itemContext.horizontal) {
               ev.preventDefault();
-              if (libraryContext && itemContext.detailsData) {
+              if (sidebarDetailsContext && itemContext.detailsData) {
                 ev.stopPropagation();
                 setLibrarySidebarData(itemContext.detailsData);
                 setLibrarySidebarVisible(true);
@@ -355,7 +443,11 @@ export function ItemCardContent({
               }
             }
           },
-          [itemContext.horizontal, itemContext.detailsData, libraryContext]
+          [
+            itemContext.horizontal,
+            itemContext.detailsData,
+            sidebarDetailsContext,
+          ]
         )}
         className="content">
         {!!itemContext.Details &&
@@ -369,7 +461,7 @@ export function ItemCardContent({
               <Details data={itemContext.detailsData} />
             </ItemDetailsModal>
           )}
-        {itemContext.horizontal && <ActivityDimmer />}
+        {itemContext.horizontal && <AlternativeDimmer />}
         <Dimmer
           active={itemContext.horizontal && itemContext.hover}
           inverted
@@ -379,11 +471,11 @@ export function ItemCardContent({
         {itemContext.horizontal && (
           <ItemCardLabels>{itemContext.labels}</ItemCardLabels>
         )}
-        <Card.Header className="text-ellipsis card-header">
+        <Card.Header className="text-ellipsis text-center card-header">
           {blur && typeof title === 'string' ? maskText(title) : title}
         </Card.Header>
         {subtitle && (
-          <Card.Meta className="text-ellipsis card-meta">
+          <Card.Meta className="text-ellipsis text-center card-meta">
             {blur && typeof subtitle === 'string'
               ? maskText(subtitle)
               : subtitle}
@@ -419,13 +511,35 @@ export function ItemCardActionContent({
 
   return (
     <List horizontal={itemContext.horizontal}>
-      {itemContext?.size === 'mini' && itemContext.hiddenAction !== false
+      {itemContext?.size === 'mini' && !itemContext.showMiniActionContent
         ? null
         : children}
     </List>
   );
 }
 
+export function ItemCardHorizontalDetailContent({
+  children,
+  tertiary = true,
+  middle = true,
+  ...props
+}: {
+  middle?: boolean;
+  children: React.ReactNode;
+} & React.ComponentProps<typeof Segment>) {
+  return (
+    <Segment
+      {...props}
+      className={classNames(
+        'small-padding-segment no-margins',
+        props.className
+      )}>
+      {middle ? <div className="centered-container">{children}</div> : children}
+    </Segment>
+  );
+}
+
+// TODO: any way to add this? any benefits?
 function SemanticNextImage({
   children,
   width,
@@ -475,7 +589,7 @@ export function ItemCardImage({
 
   const setLibrarySidebarData = useSetRecoilState(LibraryState.sidebarData);
 
-  const libraryContext = useContext(LibraryContext);
+  const sidebarDetailsContext = useSidebarDetailsContext();
 
   // const size = src && typeof src !== 'string' ? src.size : undefined;
 
@@ -496,7 +610,7 @@ export function ItemCardImage({
         (ev) => {
           if (itemContext.horizontal) {
             ev.preventDefault();
-            if (libraryContext && itemContext.detailsData) {
+            if (sidebarDetailsContext && itemContext.detailsData) {
               ev.stopPropagation();
               setLibrarySidebarData(itemContext.detailsData);
               setLibrarySidebarVisible(true);
@@ -506,15 +620,15 @@ export function ItemCardImage({
             }
           }
         },
-        [itemContext.horizontal, itemContext.detailsData, libraryContext]
+        [itemContext.horizontal, itemContext.detailsData, sidebarDetailsContext]
       )}
       dimmer={{
         active:
-          (itemContext.hover || itemContext.activity) &&
+          (itemContext.hover || itemContext.alternative) &&
           !itemContext.horizontal,
-        inverted: itemContext.activity ? false : true,
-        children: itemContext.activity ? (
-          <ActivityDimmerContent />
+        inverted: itemContext.alternative ? false : true,
+        children: itemContext.alternative ? (
+          <AlternativeContent />
         ) : (
           <>
             {!!itemContext.Details &&
@@ -549,11 +663,13 @@ export const ItemCard = React.forwardRef(
       onDetailsOpen,
       labels,
       actionContent: ActionContent,
+      horizontalDetailContent: HorizontalDetailContent,
+      horizontalDetailPosition = 'right',
       loading,
-      activity,
-      hiddenLabel,
-      hiddenAction,
-      activityContent,
+      alternative,
+      hideLabel,
+      showMiniActionContent,
+      alternativeContent: AlternativeContentComponent,
       fluid,
       horizontal,
       image: Image,
@@ -569,17 +685,19 @@ export const ItemCard = React.forwardRef(
       type: ItemType;
       labels?: React.ReactNode;
       actionContent?: React.ElementType;
+      horizontalDetailContent?: React.ElementType;
       details?: React.ElementType<{ data: PartialExcept<ServerItem, 'id'> }>;
       detailsData?: PartialExcept<ServerItem, 'id'>;
       image?: React.ElementType;
       href?: string;
       disableModal?: boolean;
       onDetailsOpen?: () => void;
-      hiddenLabel?: boolean;
-      hiddenAction?: boolean;
+      hideLabel?: boolean;
+      showMiniActionContent?: boolean;
+      horizontalDetailPosition?: 'left' | 'right';
       loading?: boolean;
-      activity?: boolean;
-      activityContent?: React.ReactNode;
+      alternative?: boolean;
+      alternativeContent?: React.ElementType;
       fluid?: boolean;
       draggable?: boolean;
       horizontal?: boolean;
@@ -588,11 +706,10 @@ export const ItemCard = React.forwardRef(
       centered?: boolean;
       link?: boolean;
       dataContext?: DataContextT;
-    },
+    } & React.ComponentProps<typeof Card>,
     forwardRef
   ) => {
     const [hover, setHover] = useState(false);
-    const [openMenu, setOpenMenu] = useState(false);
     const itemContext = useContext(ItemContext);
     const setDrawerOpen = useSetRecoilState(AppState.drawerOpen);
     const ref = useRef();
@@ -622,7 +739,7 @@ export const ItemCard = React.forwardRef(
 
     let itemSize = size ?? 'medium';
 
-    const labelContent = hiddenLabel ? null : labels;
+    const labelContent = hideLabel ? null : labels;
 
     const imageElement = Image ? (
       horizontal ? (
@@ -632,26 +749,20 @@ export const ItemCard = React.forwardRef(
       )
     ) : undefined;
 
-    const onMenuClose = useCallback(() => {
-      setOpenMenu(false);
-    }, []);
-
     const el = (
       <ItemContext.Provider
         value={{
           ...itemContext,
           isDragging,
-          onMenuClose,
           hover,
           href,
           disableModal,
-          hiddenAction,
-          openMenu,
-          activity,
-          activityContent,
+          showMiniActionContent,
+          alternative,
           onDetailsOpen,
           Details,
           detailsData,
+          AlternativeContent: AlternativeContentComponent,
           ActionContent,
           labels: labelContent,
           loading,
@@ -692,23 +803,26 @@ export const ItemCard = React.forwardRef(
               e.preventDefault();
               setOpenMenu(true);
             }}>
-            {}
             <Dimmer active={loading} inverted>
               <Loader inverted active={loading} />
             </Dimmer>
             {!horizontal && (
               <ItemCardLabels>
-                {href && (
-                  <Link href={href}>
-                    <a>{imageElement}</a>
-                  </Link>
-                )}
+                {href && <Link href={href}>{imageElement}</Link>}
                 {!!!href && !!imageElement && imageElement}
                 {labelContent}
               </ItemCardLabels>
             )}
+            {horizontal &&
+              HorizontalDetailContent &&
+              horizontalDetailPosition == 'left' && <HorizontalDetailContent />}
             {horizontal && !!imageElement && imageElement}
             {children}
+            {horizontal &&
+              HorizontalDetailContent &&
+              horizontalDetailPosition == 'right' && (
+                <HorizontalDetailContent />
+              )}
           </Card>
         </Ref>
       </ItemContext.Provider>
@@ -730,15 +844,17 @@ export function PlaceholderItemCard({
   horizontal,
   centered = true,
   type = ItemType.Gallery,
+  ...props
 }: {
   size?: ItemSize;
   fluid?: boolean;
   centered?: boolean;
   type?: ItemType;
   horizontal?: boolean;
-}) {
+} & Omit<React.ComponentProps<typeof ItemCard>, 'type'>) {
   return (
     <ItemCard
+      {...props}
       type={type}
       draggable={false}
       centered={centered}

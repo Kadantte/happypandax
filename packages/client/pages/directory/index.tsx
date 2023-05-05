@@ -2,10 +2,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useMemo } from 'react';
 
+import t from '../../client/lang';
 import PageLayout from '../../components/layout/Page';
 import MainMenu, { MenuItem } from '../../components/Menu';
-import { PageTitle } from '../../components/Misc';
-import t from '../../misc/lang';
+import { PageTitle } from '../../components/misc';
 
 interface PageProps {
   children?: React.ReactNode;
@@ -29,7 +29,13 @@ export default function DirectoryPage({ children }: PageProps) {
     <PageLayout
       menu={useMemo(
         () => (
-          <MainMenu secondary={false} size="small" tabular>
+          <MainMenu
+            secondary={false}
+            size="small"
+            tabular
+            separateNavigation
+            stackable
+          >
             <Link href="/directory/filter" passHref>
               <MenuItem link active={path === 'filter'}>{t`Filters`}</MenuItem>
             </Link>
@@ -57,7 +63,8 @@ export default function DirectoryPage({ children }: PageProps) {
           </MainMenu>
         ),
         []
-      )}>
+      )}
+    >
       <PageTitle title={t`Directory`} />
       {children}
     </PageLayout>

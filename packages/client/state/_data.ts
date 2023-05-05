@@ -1,5 +1,5 @@
-import { DataMode, ItemType } from '../misc/enums';
-import { ServerItem } from '../misc/types';
+import { DataMode, ItemType } from '../shared/enums';
+import { ServerItem } from '../shared/types';
 import StateBlock, { defineAtom } from './_base';
 
 export default class _DataState extends StateBlock {
@@ -7,6 +7,8 @@ export default class _DataState extends StateBlock {
     { default: undefined as PartialExcept<ServerItem, 'id'> | undefined },
     true
   );
+
+  static persistent = defineAtom({ default: true }, true);
 
   static mode = defineAtom({ default: DataMode.DEFAULT }, true);
 

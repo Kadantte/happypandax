@@ -1,16 +1,55 @@
 import { AxiosResponse } from 'axios';
 
-import { ItemType } from '../../misc/enums';
-import { ServerItem, ServerItemWithMetatags } from '../../misc/types';
-import { update } from '../../misc/utility';
-import type ServerService from '../../services/server';
-import { MutatationType, Query } from '../queries';
+import { ItemType } from '../../shared/enums';
+import { MutatationType } from '../../shared/query';
+import { ServerItem, ServerItemWithMetatags } from '../../shared/types';
+import { Query } from '../queries';
+import { update } from '../utility';
 
+import type { Server } from '../../services/server';
 export class ItemActions {
+  static async newItem<T extends Partial<ServerItem>>(
+    data: T,
+    args: Omit<Parameters<Server['new_item']>[0], 'item'>,
+    onNewData?: (data: T, mutated: boolean) => void
+  ) {
+    return new Promise<AxiosResponse<boolean>>((resolve, reject) => {
+      let mutated = false;
+      const newData = data;
+
+      // TODO: optimistic update
+
+      if (mutated) {
+        onNewData?.(newData, mutated);
+      }
+
+      Query.mutate(
+        MutatationType.NEW_ITEM,
+        { ...args, item: newData },
+        {
+          onSettled: (res, err, variables) => {
+            // return original data if error
+            if ((err || !res.data) && mutated) {
+              onNewData?.(data, mutated);
+            }
+
+            // need to be last
+            if (err) {
+              reject(err);
+            } else {
+              resolve(res);
+            }
+          },
+        },
+        { method: 'POST' }
+      ).catch(reject);
+    });
+  }
+
   static async updateItem<T extends Partial<ServerItem>>(
     item_id: number,
     data: T,
-    args: Parameters<ServerService['update_item']>[0],
+    args: Parameters<Server['update_item']>[0],
     onUpdatedData?: (data: T, mutated: boolean) => void
   ) {
     return new Promise<AxiosResponse<boolean>>((resolve, reject) => {
@@ -34,7 +73,7 @@ export class ItemActions {
         onUpdatedData?.(updatedData, mutated);
       }
 
-      Query.post(
+      Query.mutate(
         MutatationType.UPDATE_ITEM,
         { ...args, item: newData },
         {
@@ -51,6 +90,9 @@ export class ItemActions {
               resolve(res);
             }
           },
+        },
+        {
+          method: 'PATCH',
         }
       ).catch(reject);
     });
@@ -60,7 +102,7 @@ export class ItemActions {
     T extends RecursivePartial<ServerItemWithMetatags>
   >(
     data: T[],
-    args: Parameters<ServerService['update_metatags']>[0],
+    args: Parameters<Server['update_metatags']>[0],
     onUpdatedData?: (data: T[], mutated: boolean) => void
   ) {
     return new Promise<AxiosResponse<boolean | number>>((resolve, reject) => {
@@ -86,7 +128,7 @@ export class ItemActions {
         onUpdatedData?.(updatedData, mutated);
       }
 
-      Query.post(MutatationType.UPDATE_METATAGS, args, {
+      Query.mutate(MutatationType.UPDATE_METATAGS, args, {
         onSettled: (res, err, variables) => {
           // return original data if error
           if ((err || !res.data) && mutated) {

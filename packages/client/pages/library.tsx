@@ -1,9 +1,8 @@
 import classNames from 'classnames';
-import _ from 'lodash';
+import _, { throttle } from 'lodash';
 import { GetServerSidePropsResult, NextPageContext } from 'next';
 import Router, { useRouter } from 'next/router';
-import { useCallback, useMemo, useState } from 'react';
-import { useQueryClient } from 'react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffectOnce, useUpdateEffect } from 'react-use';
 import {
   useRecoilState,
@@ -14,17 +13,25 @@ import {
 import {
   Button,
   Checkbox,
+  Divider,
+  Dropdown,
   Form,
   Header,
+  Icon,
   Menu,
   Message,
   Modal,
+  Portal,
   Segment,
   Select,
 } from 'semantic-ui-react';
+import { SemanticICONS } from 'semantic-ui-react/dist/commonjs/generic';
 
-import { LibraryContext } from '../client/context';
+import { LibraryContext, SidebarDetailsContext } from '../client/context';
+import { useBreakpoints } from '../client/hooks/ui';
+import t from '../client/lang';
 import { QueryType, useQueryType } from '../client/queries';
+import { getCookies } from '../client/utility';
 import GalleryDataTable from '../components/dataview/GalleryData';
 import CollectionCard, {
   collectionCardDataFields,
@@ -51,18 +58,20 @@ import {
   PageInfoMessage,
   PageTitle,
   Visible,
-} from '../components/Misc';
+} from '../components/misc';
+import { ModalWithBack } from '../components/misc/BackSupport';
 import { ItemSearch } from '../components/Search';
 import { StickySidebar } from '../components/Sidebar';
 import CardView from '../components/view/CardView';
 import ListView from '../components/view/ListView';
-import { ItemSort, ItemType, ViewType } from '../misc/enums';
-import t from '../misc/lang';
-import { ServerGallery, ServerItem } from '../misc/types';
-import { getCookies, urlparse, urlstring } from '../misc/utility';
-import { ServiceType } from '../services/constants';
-import ServerService from '../services/server';
+import { ServiceType } from '../server/constants';
+import { Server } from '../services/server';
+import { ItemSort, ItemType, ViewType } from '../shared/enums';
+import { ServerGallery, ServerItem, ServerMetaTags } from '../shared/types';
+import { urlparse, urlstring } from '../shared/utility';
 import { AppState, getStateKey, LibraryState, SearchState } from '../state';
+import { useGlobalValue } from '../state/global';
+import { useInitialRecoilState } from '../state/index';
 
 const StateKey = 'library_page';
 
@@ -70,7 +79,7 @@ export function cookieKey(k: string) {
   return k;
 }
 
-export function libraryArgs({
+export function getLibraryArgs({
   ctx,
   stateKey: defaultStateKey,
   cookieKey: defaultCookieKey,
@@ -222,7 +231,7 @@ export function libraryArgs({
           : itemType === ItemType.Collection
           ? collectionCardDataFields
           : groupingCardDataFields,
-    } as Parameters<ServerService['library']>[0],
+    } as Parameters<Server['library']>[0],
   };
 }
 
@@ -258,20 +267,25 @@ function FilterPageMessage({
 }
 
 function LibrarySidebar() {
+  const { isMobileMax } = useBreakpoints();
   const [sidebarVisible, setSidebarVisible] = useRecoilState(
     LibraryState.sidebarVisible
   );
   const sidebarData = useRecoilValue(LibraryState.sidebarData);
 
+  const onHide = useCallback(() => {
+    setSidebarVisible(false);
+  }, []);
+
   return (
-    <StickySidebar
-      className="sticky-page-sidebar"
-      visible={sidebarVisible}
-      onHide={useCallback(() => {
-        setSidebarVisible(false);
-      }, [])}>
-      {sidebarData && <GalleryDataTable data={sidebarData} />}
-    </StickySidebar>
+    <Portal open>
+      <StickySidebar
+        className={classNames('sticky-page-sidebar', { mobile: isMobileMax })}
+        visible={sidebarVisible}
+        onHide={onHide}>
+        {sidebarData && <GalleryDataTable data={sidebarData} />}
+      </StickySidebar>
+    </Portal>
   );
 }
 
@@ -295,13 +309,16 @@ function LibrarySettings({
   trigger: React.ReactNode;
   stateKey: string;
 }) {
-  const sameMachine = useRecoilState(AppState.sameMachine);
+  const sameMachine = useGlobalValue('sameMachine');
+
   const [item, setItem] = useRecoilState(LibraryState.item(stateKey));
   const [view, setView] = useRecoilState(LibraryState.view(stateKey));
   const [series, setSeries] = useRecoilState(LibraryState.series);
   const [infinite, setInfinite] = useRecoilState(LibraryState.infinite);
+
   const [limit, setLimit] = useRecoilState(LibraryState.limit);
   const [display, setDisplay] = useRecoilState(LibraryState.display);
+
   const [externalViewer, setExternalViewer] = useRecoilState(
     AppState.externalViewer
   );
@@ -321,7 +338,7 @@ function LibrarySettings({
   }, []);
 
   return (
-    <Modal
+    <ModalWithBack
       trigger={trigger}
       dimmer={false}
       onClose={useCallback(() => {
@@ -421,7 +438,7 @@ function LibrarySettings({
           /> */}
 
           <Form.Field>
-            <label>{t`Collapse galleries in series`}</label>
+            <label>{t`Collapse series`}</label>
             <Checkbox
               toggle
               checked={series}
@@ -432,7 +449,6 @@ function LibrarySettings({
               }, [])}
             />
           </Form.Field>
-
           <Form.Field>
             <label>{t`Infinite scroll`}</label>
             <Checkbox
@@ -457,12 +473,116 @@ function LibrarySettings({
           )}
         </Form>
       </Modal.Content>
-    </Modal>
+    </ModalWithBack>
+  );
+}
+
+function ActionsMenu({
+  itemType,
+  inverted,
+}: {
+  itemType: ItemType;
+  inverted?: boolean;
+}) {
+  const actions: {
+    label: string;
+    metatags?: Partial<ServerMetaTags>;
+    icon?: SemanticICONS;
+    page?: boolean;
+    itemTypes?: ItemType[];
+    divider?: boolean;
+    view?: boolean;
+    onClick?: () => void;
+  }[] = [
+    {
+      label: t`Select all`,
+      view: false,
+      icon: 'plus',
+      itemTypes: [ItemType.Gallery, ItemType.Grouping],
+    },
+    {
+      label: t`Query metadata`,
+      view: false,
+      icon: 'search',
+      itemTypes: [ItemType.Gallery, ItemType.Grouping],
+    },
+    {
+      label: 'd-1',
+      divider: true,
+      view: false,
+      itemTypes: [ItemType.Gallery, ItemType.Grouping],
+    },
+    { label: t`Favorite all`, metatags: { favorite: true }, icon: 'heart' },
+    {
+      label: t`Unfavorite all`,
+      metatags: { favorite: false },
+      icon: 'heart outline',
+    },
+    { label: 'd-2', divider: true },
+    { label: t`Mark as read`, metatags: { read: true }, icon: 'eye' },
+    {
+      label: t`Mark as unread`,
+      metatags: { read: false },
+      icon: 'eye slash outline',
+    },
+    { label: 'd-3', divider: true },
+    {
+      label: t`Send to Library`,
+      metatags: { inbox: false },
+      icon: 'archive',
+    },
+    { label: t`Send to Inbox`, metatags: { inbox: true }, icon: 'inbox' },
+    { label: 'd-4', divider: true },
+    { label: t`Send to Trash`, metatags: { trash: true }, icon: 'trash' },
+  ];
+
+  const cls = classNames('mini', { inverted });
+
+  return (
+    <Divider horizontal fitted>
+      <Dropdown button basic className={cls} text={t`Page actions`}>
+        <Dropdown.Menu>
+          {actions.map((action) => {
+            if (action.page === false) return null;
+            if (action.itemTypes && !action.itemTypes.includes(itemType))
+              return null;
+            if (action.divider) return <Dropdown.Divider key={action.label} />;
+            return (
+              <Dropdown.Item key={action.label} onClick={action?.onClick}>
+                <Icon name={action.icon} />
+                {action.label}
+              </Dropdown.Item>
+            );
+          })}
+        </Dropdown.Menu>
+      </Dropdown>
+      <Dropdown
+        inverted={inverted}
+        button
+        basic
+        className={cls}
+        text={t`View actions`}>
+        <Dropdown.Menu>
+          {actions.map((action) => {
+            if (action.view === false) return null;
+            if (action.itemTypes && !action.itemTypes.includes(itemType))
+              return null;
+            if (action.divider) return <Dropdown.Divider key={action.label} />;
+            return (
+              <Dropdown.Item key={action.label} onClick={action?.onClick}>
+                <Icon name={action.icon} />
+                {action.label}
+              </Dropdown.Item>
+            );
+          })}
+        </Dropdown.Menu>
+      </Dropdown>
+    </Divider>
   );
 }
 
 export interface PageProps {
-  data: Unwrap<ServerService['library']>;
+  data: Unwrap<Server['library']>;
   page: number;
   itemType: ItemType;
   urlQuery: ReturnType<typeof urlparse>;
@@ -472,14 +592,16 @@ export interface PageProps {
 
 export async function getServerSideProps(
   context: NextPageContext,
-  args?: ReturnType<typeof libraryArgs>
+  args?: ReturnType<typeof getLibraryArgs>
 ): Promise<GetServerSidePropsResult<PageProps>> {
-  const server = global.app.service.get(ServiceType.Server);
+  const server = await global.app.service
+    .get(ServiceType.Server)
+    .context(context);
 
   const urlQuery = urlparse(context.resolvedUrl);
 
   const { errorLimit, args: largs } =
-    args ?? libraryArgs({ ctx: context, urlQuery });
+    args ?? getLibraryArgs({ ctx: context, urlQuery });
 
   const data = errorLimit
     ? { count: 0, items: [] }
@@ -512,13 +634,14 @@ export default function Page({
   hideViewItems?: boolean;
   stateKey?: string;
   children?: React.ReactNode;
-  libraryArgs?: Partial<Parameters<typeof libraryArgs>[0]>;
+  libraryArgs?: Partial<Parameters<typeof getLibraryArgs>[0]>;
 }) {
+  const { isMobileMax } = useBreakpoints();
+
   const stateKey = defaultStateKey ?? StateKey;
 
   const [item, setItem] = useRecoilState(LibraryState.item(stateKey));
   const [view, setView] = useRecoilState(LibraryState.view(stateKey));
-  const [query, setQuery] = useRecoilState(LibraryState.query(stateKey));
   const [favorites, setFavorites] = useRecoilState(
     LibraryState.favorites(stateKey)
   );
@@ -540,48 +663,64 @@ export default function Page({
   const router = useRouter();
   const routerQuery = urlparse(router.asPath);
 
-  const { errorLimit, args: libraryargs } = libraryArgs({
+  const { errorLimit, args: libraryargs } = getLibraryArgs({
     urlQuery: routerQuery,
     ...defaultLibraryArgs,
   });
 
-  const [infiniteKey, setInfiniteKey] = useState('');
+  const generateInfiniteKey = useCallback(
+    () => (infinite ? new Date().getTime().toString(36) : ''),
+    [infinite]
+  );
 
-  const activePage = infiniteKey
-    ? page
+  const [infiniteKey, setInfiniteKey] = useState('');
+  const [infiniteDirty, setInfiniteDirty] = useState(false);
+
+  const [query, setQuery] = useInitialRecoilState(
+    LibraryState.query(stateKey),
+    libraryargs.search_query ? urlQuery.query.q ?? undefined : undefined
+  );
+
+  const activePage = infiniteDirty
+    ? page ?? initialPage ?? 1
     : libraryargs.page !== undefined
     ? libraryargs.page + 1
     : page;
 
   const errorLimited = errorLimit || initialErrorLimit;
 
-  const { data, fetchNextPage, isFetching, queryKey, remove } = useQueryType(
+  const {
+    data,
+    fetchNextPage,
+    isFetching,
+    isFetchingNextPage,
+    queryKey,
+    remove,
+  } = useQueryType(
     QueryType.LIBRARY,
     {
       ...libraryargs,
       item: itemType,
-      page: infiniteKey ? initialPage - 1 : activePage - 1,
+      page: infiniteDirty ? initialPage - 1 : activePage - 1,
     },
     {
       enabled: !errorLimited,
-      initialData: global.app.IS_SERVER ? undefined : initialData,
+      initialData,
       initialDataUpdatedAt: requestTime,
       infinite: true,
-      infinitePageParam: (variables, ctx) => ({
-        ...variables,
-        page: (ctx.pageParam ?? 1) - 1,
-      }),
-      onQueryKey: () => QueryType.LIBRARY.toString() + infiniteKey,
+      infinitePageParam: (variables, ctx) => {
+        return {
+          ...variables,
+          page: (ctx.pageParam ?? 1) - 1, // server expected zero-indexed
+        };
+      },
+      onQueryKey: () => [QueryType.LIBRARY.toString(), infiniteKey],
     }
   );
 
-  const items = infiniteKey
-    ? data?.pages?.flat?.().flatMap?.((i) => i.data.items)
-    : initialData.items;
+  const items = data?.pages?.flat?.().flatMap?.((i) => i.data.items);
 
-  const count = infiniteKey
-    ? data?.pages?.[0]?.data?.count
-    : initialData?.count;
+  const count = data?.pages?.[0]?.data?.count;
 
   const initialQueryState = useRecoilTransaction_UNSTABLE(({ set }) => () => {
     if (urlQuery.query?.fav !== undefined) {
@@ -628,7 +767,10 @@ export default function Page({
     initialQueryState();
   });
 
-  const client = useQueryClient();
+  useEffect(() => {
+    setInfiniteDirty(false);
+    setInfiniteKey(infinite ? generateInfiniteKey() : '');
+  }, [requestTime]);
 
   useUpdateEffect(() => {
     const q = {
@@ -644,7 +786,7 @@ export default function Page({
     };
     router.replace(urlstring(q)).then(() => {
       setPage(1);
-      setInfiniteKey('');
+      setInfiniteKey(generateInfiniteKey());
     });
     // .then(() => client.resetQueries(queryKey));
   }, [view, item, favorites, sortDesc, sort, filter, limit, searchOptions]);
@@ -655,11 +797,9 @@ export default function Page({
       p: 1,
       q: query,
     };
-    setPage(1);
-    setInfiniteKey('');
     router.push(urlstring(q)).then(() => {
       setPage(1);
-      setInfiniteKey('');
+      setInfiniteKey(generateInfiniteKey());
     });
 
     // .then(() => client.resetQueries(queryKey));
@@ -686,7 +826,7 @@ export default function Page({
     [router.query]
   );
 
-  const onItemKey = useCallback((item: ServerItem) => item.id, []);
+  const onItemKey = useCallback((item: ServerItem) => item?.id, []);
   const saveRecentQuery = useCallback(
     _.debounce((query: string) => {
       setRecentQuery([query]);
@@ -694,31 +834,41 @@ export default function Page({
     []
   );
 
-  const fetchNext = useCallback(() => {
-    let key = infiniteKey;
-    if (!infiniteKey) {
-      key = new Date().getTime().toString(36);
-      setInfiniteKey(key);
-    }
+  const fetchNext = useCallback(
+    throttle(() => {
+      if (!infiniteDirty) {
+        setInfiniteDirty(true);
+      }
 
-    if (!isFetching && fetchNextPage) {
-      let p = initialPage + data.pages.length;
-      console.log(p);
-      fetchNextPage({
-        pageParam: p,
-      });
-      setPage(p);
-      router.replace(urlstring({ p }), undefined, {
-        shallow: true,
-        scroll: false,
-      });
-    }
-  }, [router, initialPage, fetchNextPage, infiniteKey, isFetching, data]);
+      if (!infiniteKey) {
+        setInfiniteKey(generateInfiniteKey());
+      }
 
-  const onPageChange = useCallback((ev, n) => {
-    setInfiniteKey('');
-    setPage(n);
-  }, []);
+      if (!isFetchingNextPage && fetchNextPage) {
+        const prev_p =
+          (data.pageParams?.[data.pageParams.length - 1] as
+            | number
+            | undefined) ?? initialPage;
+        const prevPage = data.pages?.[data.pages.length - 1];
+
+        let p = prev_p + 1;
+
+        if (p > Math.ceil(prevPage.data.count / limit)) {
+          return false;
+        }
+
+        fetchNextPage({ pageParam: p });
+
+        setPage(p);
+
+        router.replace(urlstring({ p }), undefined, {
+          shallow: true,
+          scroll: false,
+        });
+      }
+    }, 500),
+    [router, initialPage, infiniteDirty, fetchNextPage, isFetching, data, limit]
+  );
 
   const onItemChange = useRecoilTransaction_UNSTABLE(({ set }) => (i) => {
     set(LibraryState.item(stateKey), i);
@@ -740,7 +890,7 @@ export default function Page({
     <PageLayout
       menu={useMemo(
         () => (
-          <MainMenu fixed>
+          <MainMenu fixed stackable>
             <MenuItem className={classNames('no-right-padding')}>
               <ViewButtons
                 view={view}
@@ -776,8 +926,12 @@ export default function Page({
                   onClear={() => {
                     setQuery('');
                   }}
-                  defaultValue={(urlQuery.query?.q as string) ?? query}
-                  placeholder={t`Search using tags, titles, names, artists... Press "/" to search`}
+                  defaultValue={query}
+                  placeholder={
+                    isMobileMax
+                      ? t`Search here...`
+                      : t`Search using tags, titles, names, artists... Press "/" to search`
+                  }
                   showOptions
                   size="small"
                   fluid
@@ -786,7 +940,7 @@ export default function Page({
             </Menu.Menu>
           </MainMenu>
         ),
-        [view, item, itemType, query, urlQuery.query?.q, hideViewItems]
+        [view, item, itemType, query, urlQuery.query?.q, hideViewItems, isMobileMax]
       )}
       bottomZone={useMemo(() => {
         return filter ? (
@@ -866,31 +1020,38 @@ export default function Page({
         </EmptySegment>
       )}
       <LibraryContext.Provider value={true}>
-        <LibrarySidebar />
-        {!errorLimited && (
-          <View
-            hrefTemplate={pageHrefTemplate}
-            activePage={activePage}
-            items={items}
-            infinite={infinite}
-            loading={isFetching}
-            onPageChange={onPageChange}
-            onLoadMore={fetchNext}
-            paddedChildren
-            itemRender={
-              itemType === ItemType.Gallery
-                ? GalleryCard
-                : itemType === ItemType.Collection
-                ? CollectionCard
-                : GroupingCard
-            }
-            itemsPerPage={limit}
-            onItemKey={onItemKey}
-            totalItemCount={count}
-            pagination={!!count || errorLimited}
-            bottomPagination={!!count}
-          />
-        )}
+        <SidebarDetailsContext.Provider value={item !== ItemType.Collection}>
+          <LibrarySidebar />
+          {!errorLimited && (
+            <>
+              <ActionsMenu
+                itemType={itemType}
+                inverted={defaultLibraryArgs?.itemType === ItemType.Collection}
+              />
+              <View
+                hrefTemplate={pageHrefTemplate}
+                activePage={activePage}
+                items={items}
+                infinite={infinite}
+                loading={isFetchingNextPage}
+                onLoadMore={fetchNext}
+                paddedChildren
+                itemRender={
+                  itemType === ItemType.Gallery
+                    ? GalleryCard
+                    : itemType === ItemType.Collection
+                    ? CollectionCard
+                    : GroupingCard
+                }
+                itemsPerPage={limit}
+                onItemKey={onItemKey}
+                totalItemCount={count}
+                pagination={!!count || errorLimited}
+                bottomPagination={!!count}
+              />
+            </>
+          )}
+        </SidebarDetailsContext.Provider>
       </LibraryContext.Provider>
     </PageLayout>
   );

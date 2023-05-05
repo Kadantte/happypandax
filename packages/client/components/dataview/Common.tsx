@@ -5,7 +5,8 @@ import { Header, Icon, Label, List, Segment, Table } from 'semantic-ui-react';
 
 import { ItemActions } from '../../client/actions/item';
 import { useUpdateDataState } from '../../client/hooks/item';
-import t from '../../misc/lang';
+import t from '../../client/lang';
+import { dateFromTimestamp } from '../../client/utility';
 import {
   FieldPath,
   ServerCollection,
@@ -15,10 +16,9 @@ import {
   ServerItemWithUrls,
   ServerMetaTags,
   ServerNamespaceTag,
-} from '../../misc/types';
-import { dateFromTimestamp } from '../../misc/utility';
+} from '../../shared/types';
 import { AppState } from '../../state';
-import Rating from '../Rating';
+import Rating from '../misc/Rating';
 import styles from './Common.module.css';
 
 export function LanguageLabel({
@@ -256,21 +256,23 @@ export function GroupingLabel({
 
 export function FavoriteLabel({
   onRate,
+  onRating,
   className,
   size = 'massive',
   ...props
 }: Omit<MakeOptional<React.ComponentProps<typeof Rating>, 'icon'>, 'size'> & {
   size?: React.ComponentProps<typeof Rating>['size'] | 'gigantic';
+  onRating?: (rating: number) => void;
 }) {
   const { data, setData, context } = useUpdateDataState<{
     id: number;
     metatags: PartialExcept<ServerMetaTags, 'favorite'>;
   }>();
 
-  // console.log(context.key, data);
-
   const onFav = useCallback(
     (e, d) => {
+      e.preventDefault();
+
       if (context.editing) {
         throw Error('not implemented');
       } else {
@@ -279,7 +281,7 @@ export function FavoriteLabel({
           {
             item_type: context.type,
             item_id: data.id,
-            metatags: { favorite: d.rating!! },
+            metatags: { favorite: !!d.rating },
           },
           (d, mutated) => {
             if (mutated) {
@@ -288,8 +290,10 @@ export function FavoriteLabel({
           }
         ).catch((err) => console.error(err));
       }
+
+      onRating?.(d.rating);
     },
-    [context.type, data]
+    [context.type, data, onRating]
   );
 
   return (
@@ -365,10 +369,12 @@ export function FolllowLabel({
 
 export function RatingLabel({
   size = 'huge',
+  onRating,
   defaultRating,
 }: {
   defaultRating?: number;
-  size?: React.ComponentProps<typeof Rating>;
+  size?: React.ComponentProps<typeof Rating>['size'] | 'gigantic';
+  onRating?: (rating: number) => void;
 }) {
   const { data, setData, context } = useUpdateDataState<{
     id: number;
@@ -382,6 +388,7 @@ export function RatingLabel({
       color="yellow"
       onRate={useCallback(
         (e, d) => {
+          e.preventDefault();
           if (context.editing) {
             throw Error('not implemented');
           } else {
@@ -395,9 +402,11 @@ export function RatingLabel({
                 }
               }
             ).catch((err) => console.error(err));
+
+            onRating?.(d.rating);
           }
         },
-        [context.type, data]
+        [context.type, data, onRating]
       )}
       rating={data?.rating}
       defaultRating={defaultRating}

@@ -1,17 +1,16 @@
 import { createSession } from 'better-sse';
 
-import { getSession, handler } from '../../../misc/requests';
-import { ServiceType } from '../../../services/constants';
+import { ServiceType } from '../../../server/constants';
+import { getServerSession, handler } from '../../../server/requests';
 
-export default handler().all(async (req, res) => {
+export default handler({ auth: false }).all(async (req, res) => {
   const session = await createSession(req, res, {
     headers: {
       'Cache-Control': 'no-cache, no-transform',
     },
   });
   const fairy = global.app.service.get(ServiceType.Fairy);
+  const sess = await getServerSession({ req, res });
 
-  const s = await getSession(req, res);
-
-  fairy.register(req, session, s.id);
+  fairy.register(req, session, sess.id);
 });

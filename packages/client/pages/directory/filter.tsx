@@ -11,16 +11,16 @@ import {
 } from 'semantic-ui-react';
 
 import { useCommand } from '../../client/command';
+import t from '../../client/lang';
 import { MutatationType, useMutationType } from '../../client/queries';
 import FilterCard, { filterCardDataFields } from '../../components/item/Filter';
 import { ItemSearch } from '../../components/Search';
 import { PaginatedView } from '../../components/view/index';
-import { ItemSort, ItemType } from '../../misc/enums';
-import t from '../../misc/lang';
-import { ServerFilter } from '../../misc/types';
-import { urlparse, urlstring } from '../../misc/utility';
-import { ServiceType } from '../../services/constants';
+import { ServiceType } from '../../server/constants';
 import ServerService from '../../services/server';
+import { ItemSort, ItemType } from '../../shared/enums';
+import { ServerFilter } from '../../shared/types';
+import { urlparse, urlstring } from '../../shared/utility';
 import DirectoryPage from './';
 
 interface PageProps {
@@ -31,7 +31,9 @@ interface PageProps {
 const limit = 100;
 
 export async function getServerSideProps(context: NextPageContext) {
-  const server = global.app.service.get(ServiceType.Server);
+  const server = await global.app.service
+    .get(ServiceType.Server)
+    .context(context);
 
   const urlQuery = urlparse(context.resolvedUrl);
 
@@ -71,9 +73,15 @@ export default function Page({ page, data }: PageProps) {
     }
   );
 
-  useCommand(filterUpdateData ? filterUpdateData.data : undefined, {}, () => {
-    setUpdating(false);
-  });
+  useCommand(
+    filterUpdateData ? filterUpdateData.data : undefined,
+    {
+      stopOnUnmount: false,
+    },
+    () => {
+      setUpdating(false);
+    }
+  );
 
   const urlQuery = urlparse(router.asPath);
 

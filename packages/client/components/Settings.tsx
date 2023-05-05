@@ -19,11 +19,11 @@ import {
 } from 'semantic-ui-react';
 
 import { useConfig } from '../client/hooks/settings';
-import t from '../misc/lang';
-import { defined } from '../misc/utility';
+import t from '../client/lang';
+import { defined } from '../shared/utility';
 import { AppState, MiscState } from '../state';
-import { JSONTextEditor } from './Misc';
-import { Plugins } from './Plugin';
+import { JSONTextEditor } from './misc';
+import { ModalWithBack } from './misc/BackSupport';
 
 function namespaceExists(
   cfg: Record<string, any>,
@@ -201,6 +201,12 @@ export function OptionField<
 function GeneralPane() {
   const [blur, setBlur] = useRecoilState(AppState.blur);
   const [theme, setTheme] = useRecoilState(AppState.theme);
+  const [drawerButtonPosition, setDrawerButtonPosition] = useRecoilState(
+    AppState.drawerButtonPosition
+  );
+  const [sidebarForcePosition, setSidebarForcePosition] = useRecoilState(
+    AppState.sidebarForcePosition
+  );
 
   const [cfg, setConfig] = useConfig({
     'gallery.auto_rate_on_favorite': undefined as boolean,
@@ -227,24 +233,8 @@ function GeneralPane() {
   return (
     <Segment basic>
       <Form>
-        <Header size="small" dividing>{t`Application`}</Header>
+        <Header size="small" dividing>{t`Web Client`}</Header>
         <Segment>
-          <Form.Field>
-            <Checkbox
-              toggle
-              label={
-                <label>
-                  <IsolationLabel isolation="client" /> {t`Blur`}
-                </label>
-              }
-              checked={blur}
-              onChange={useCallback((ev, { checked }) => {
-                ev.preventDefault();
-                setBlur(checked);
-              }, [])}
-            />
-            <div className="muted">{t`Blurs gallery and and collection covers across the application`}</div>
-          </Form.Field>
           <Form.Field>
             <label>
               <IsolationLabel isolation="client" /> {t`Select theme`}
@@ -266,6 +256,60 @@ function GeneralPane() {
               }, [])}
             />
           </Form.Field>
+          <Form.Field>
+            <Checkbox
+              toggle
+              label={
+                <label>
+                  <IsolationLabel isolation="client" /> {t`Blur`}
+                </label>
+              }
+              checked={blur}
+              onChange={useCallback((ev, { checked }) => {
+                ev.preventDefault();
+                setBlur(checked);
+              }, [])}
+            />
+            <div className="muted">{t`Blurs gallery and and collection covers across the application`}</div>
+          </Form.Field>
+          <Form.Field>
+            <label>
+              <IsolationLabel isolation="client" /> {t`Drawer button position`}
+            </label>
+            <Select
+              options={[
+                { key: 'left', value: 'left', text: t`Left` },
+                { key: 'right', value: 'right', text: t`Right` },
+              ]}
+              value={drawerButtonPosition}
+              placeholder={t`Select position`}
+              onChange={useCallback((ev, { value }) => {
+                ev.preventDefault();
+                if (value) setDrawerButtonPosition(value as any);
+              }, [])}
+            />
+          </Form.Field>
+          <Form.Field>
+            <label>
+              <IsolationLabel isolation="client" /> {t`Sidebar position`}
+            </label>
+            <Select
+              options={[
+                { key: 'auto', value: 'auto', text: t`Auto` },
+                { key: 'left', value: 'left', text: t`Left` },
+                { key: 'right', value: 'right', text: t`Right` },
+              ]}
+              value={sidebarForcePosition ?? 'auto'}
+              placeholder={t`Select position`}
+              onChange={useCallback((ev, { value }) => {
+                ev.preventDefault();
+                setSidebarForcePosition(
+                  value === 'auto' ? undefined : (value as any)
+                );
+              }, [])}
+            />
+          </Form.Field>
+
           <OptionField
             isolation="client"
             label={t`Select language`}
@@ -295,14 +339,14 @@ function GeneralPane() {
             </Header>
             <Segment clearing>
               <OptionField
-                label={t`Automatically set unrated gallery to max rating on favorite`}
+                label={t`Set unrated gallery to maximum rating when favorited`}
                 cfg={cfg}
                 nskey="gallery.auto_rate_on_favorite"
                 type="boolean"
                 optionChange={optionChange}
               />
               <OptionField
-                label={t`How many pages in percent has to be read before the gallery is considered read`}
+                label={t`What percentage of pages must be read to consider the gallery as read?`}
                 cfg={cfg}
                 nskey="gallery.pages_to_read"
                 float
@@ -413,82 +457,6 @@ function NetworkPane() {
   return <Segment basic></Segment>;
 }
 
-function PluginsPane() {
-  const [cfg, setConfig] = useConfig({
-    'plugin.dev': undefined as boolean,
-    'plugin.auto_install_plugin_dependency': undefined as boolean,
-    'plugin.plugin_dir': undefined as string,
-    'plugin.check_plugin_release_interval': undefined as number,
-    'plugin.auto_install_plugin_release': undefined as boolean,
-    'plugin.check_new_plugin_releases': undefined as boolean,
-  });
-
-  const optionChange = useCallback(
-    function f<T extends typeof cfg, K extends keyof T>(key: K, value: T[K]) {
-      setConfig({ [key]: value });
-    },
-    [setConfig]
-  );
-
-  return (
-    <Segment basic>
-      <Form>
-        <Segment clearing>
-          <IsolationLabel attached="top left" isolation="server" />
-          <OptionField
-            label={t`Additional plugin directory to look for plugins`}
-            cfg={cfg}
-            nskey="plugin.plugin_dir"
-            type="string"
-            optionChange={optionChange}
-          />
-          <OptionField
-            label={t`Automatically install a plugin's dependencies when installing a plugin`}
-            cfg={cfg}
-            nskey="plugin.auto_install_plugin_dependency"
-            type="boolean"
-            optionChange={optionChange}
-          />
-          <OptionField
-            label={t`Regularly check plugins for updates`}
-            cfg={cfg}
-            nskey="plugin.check_new_plugin_releases"
-            type="boolean"
-            optionChange={optionChange}
-          />
-          <OptionField
-            label={t`Interval in minutes between checking for a new plugin update, set 0 to only check once every startup`}
-            cfg={cfg}
-            nskey="plugin.check_plugin_release_interval"
-            type="number"
-            inputLabel={t`minutes`}
-            optionChange={optionChange}
-          />
-          <OptionField
-            label={t`Automatically download and install new plugin updates`}
-            cfg={cfg}
-            nskey="plugin.auto_install_plugin_release"
-            type="boolean"
-            optionChange={optionChange}
-          />
-          <OptionField
-            label={t`Enable plugin development mode`}
-            cfg={cfg}
-            nskey="plugin.dev"
-            type="boolean"
-            optionChange={optionChange}
-          />
-        </Segment>
-      </Form>
-      <Header size="small" dividing>
-        <IsolationLabel isolation="server" />
-        {t`Plugins`}
-      </Header>
-      <Plugins basic className="no-padding-segment" />
-    </Segment>
-  );
-}
-
 function ServerPane() {
   const [cfg, setConfig] = useConfig({
     'core.trash_item_duration': undefined as number,
@@ -526,10 +494,11 @@ function ServerPane() {
             optionChange={optionChange}
           />
           <OptionField
-            label={t`Amount of time a session is valid (set to 0 for always valid)`}
+            label={t`Amount of time a session is valid for`}
             cfg={cfg}
             nskey="server.session_span"
             type="number"
+            help={`Set to 0 for always valid`}
             inputLabel={t`minutes`}
             optionChange={optionChange}
           />
@@ -552,20 +521,24 @@ function ServerPane() {
                 label={t`Automatically download, install and restart when a new update is available`}
                 cfg={cfg}
                 nskey="core.auto_install_release"
+                disabled={!cfg?.['core.check_new_releases']}
                 type="boolean"
                 optionChange={optionChange}
               />
               <OptionField
-                label={t`Interval in minutes between checking for a new update, set 0 to only check once every startup`}
+                label={t`Interval in minutes between checking for a new update`}
                 cfg={cfg}
                 nskey="core.check_release_interval"
                 type="number"
+                disabled={!cfg?.['core.check_new_releases']}
+                help={`Set to 0 to only check once every startup`}
                 inputLabel={t`minutes`}
                 optionChange={optionChange}
               />
               <OptionField
                 label={t`Allow downloading beta releases`}
                 cfg={cfg}
+                disabled={!cfg?.['core.check_new_releases']}
                 nskey="core.allow_beta_releases"
                 type="boolean"
                 optionChange={optionChange}
@@ -573,6 +546,7 @@ function ServerPane() {
               <OptionField
                 label={t`Allow downloading alpha releases`}
                 cfg={cfg}
+                disabled={!cfg?.['core.check_new_releases']}
                 nskey="core.allow_alpha_releases"
                 type="boolean"
                 optionChange={optionChange}
@@ -588,10 +562,11 @@ function ServerPane() {
             </Header>
             <Segment clearing>
               <OptionField
-                label={t`Interval in hours between automatically creating a backup (set to 0 to disable auto backup)`}
+                label={t`Interval in hours between automatically creating a backup`}
                 cfg={cfg}
                 nskey="core.auto_backup_interval"
                 type="number"
+                help={`Set to 0 to disable auto backup`}
                 inputLabel={t`hours`}
                 optionChange={optionChange}
               />
@@ -629,13 +604,16 @@ function ServerPane() {
               <OptionField
                 label={t`Send deleted files to the OS recycle bin when pruned from trash`}
                 cfg={cfg}
+                disabled={!cfg?.['core.trash_item_delete_files']}
                 nskey="core.trash_send_to_systemtrash"
                 type="boolean"
                 optionChange={optionChange}
               />
               <OptionField
-                label={t`How many hours an item should stay in the trash (per item) before it is deleted and removed PERMANENTLY`}
+                label={t`How many hours an item should stay in the trash before it is deleted and removed PERMANENTLY`}
                 cfg={cfg}
+                disabled={!cfg?.['core.trash_item_delete_files']}
+                help={`This is applied on a per-item basis`}
                 nskey="core.trash_item_duration"
                 type="number"
                 inputLabel={t`hours`}
@@ -707,7 +685,7 @@ function ImportPane() {
               />
               <OptionField
                 label={t`Move gallery source`}
-                help={t`Move the gallery files to a new location`}
+                help={t`Move the gallery files to a specified location`}
                 cfg={cfg}
                 nskey="import.move_gallery"
                 type="boolean"
@@ -809,7 +787,7 @@ function AdvancedPane() {
     <Segment basic>
       <Message warning>
         <Icon name="warning sign" />
-        {t`These settings should only be changed if you know what you're doing.`}
+        Momo: {t`Please be careful with these settings!`}
       </Message>
       <Form>
         <Segment>
@@ -824,13 +802,14 @@ function AdvancedPane() {
           <OptionField
             label={t`Report critical errors so they can be fixed`}
             cfg={cfg}
+            help={t`Momo: Don't complain about errors if you turn this off! ٩(๑ \`н´๑)۶`}
             nskey="core.report_critical_errors"
             type="boolean"
             optionChange={optionChange}
           />
           <Divider />
           <OptionField
-            label={t`Automatically index new or updated galleries and collections`}
+            label={t`Automatically index new or updated items`}
             cfg={cfg}
             nskey="advanced.enable_auto_indexing"
             type="boolean"
@@ -845,10 +824,11 @@ function AdvancedPane() {
             optionChange={optionChange}
           />
           <OptionField
-            label={t`Wide thumbnails crop alignment (a number between 0 (left) to 1 (right))`}
+            label={t`Wide thumbnails crop alignment`}
             cfg={cfg}
             nskey="advanced.crop_thumbnail_alignment"
             type="number"
+            help={t`A number between 0 (left) to 1 (right)`}
             optionChange={optionChange}
           />
         </Segment>
@@ -858,6 +838,7 @@ function AdvancedPane() {
             <Header size="small" dividing>
               <IsolationLabel isolation="server" />
               {t`Tasks`}
+              <Header.Subheader>{t`Note that changing these does not necessarily increase perfomance`}</Header.Subheader>
             </Header>
             <Segment clearing>
               <OptionField
@@ -893,17 +874,11 @@ function AdvancedPane() {
             </Header>
             <Segment clearing>
               <OptionField
-                label={t`Enable cache`}
-                cfg={cfg}
-                nskey="advanced.enable_cache"
-                type="boolean"
-                optionChange={optionChange}
-              />
-              <OptionField
                 label={t`Auto-clean thumbnail cache when it exceeds this size`}
                 cfg={cfg}
                 nskey="core.auto_thumb_clean_size"
                 type="number"
+                help={t`For small image thumbnails, like gallery covers`}
                 inputLabel="MB"
                 optionChange={optionChange}
               />
@@ -913,6 +888,7 @@ function AdvancedPane() {
                 nskey="core.auto_pages_clean_size"
                 type="number"
                 inputLabel="MB"
+                help={t`For downsized versions of the original page images`}
                 optionChange={optionChange}
               />
               <OptionField
@@ -920,6 +896,7 @@ function AdvancedPane() {
                 cfg={cfg}
                 nskey="core.auto_temp_clean_size"
                 type="number"
+                help={t`For temporary files, these are usually deleted after a short time`}
                 inputLabel="MB"
                 optionChange={optionChange}
               />
@@ -928,14 +905,30 @@ function AdvancedPane() {
                 cfg={cfg}
                 nskey="core.auto_cache_clean_size"
                 type="number"
+                help={t`For long-term cached files or other files that don't fit in the other categories`}
                 inputLabel="MB"
                 optionChange={optionChange}
               />
+
+              <Form.Field>
+                <Divider section />
+              </Form.Field>
+
+              <OptionField
+                label={t`Enable data cache`}
+                cfg={cfg}
+                nskey="advanced.enable_cache"
+                type="boolean"
+                help={t`This will cache requested data, sometimes reducing the amount of processing done on the server`}
+                optionChange={optionChange}
+              />
+
               <OptionField
                 label={t`Cache TTL in seconds`}
                 cfg={cfg}
                 nskey="core.cache_expiration_time"
                 type="number"
+                disabled={!cfg?.['advanced.enable_cache']}
                 inputLabel={t`seconds`}
                 optionChange={optionChange}
               />
@@ -944,14 +937,16 @@ function AdvancedPane() {
                 cfg={cfg}
                 nskey="core.interface_cache_time"
                 type="number"
+                disabled={!cfg?.['advanced.enable_cache']}
                 inputLabel={t`seconds`}
                 optionChange={optionChange}
               />
               <OptionField
-                label={t`Client message Cache TTL in seconds`}
+                label={t`Client API Cache TTL in seconds`}
                 cfg={cfg}
                 nskey="core.message_cache_time"
                 type="number"
+                disabled={!cfg?.['advanced.enable_cache']}
                 inputLabel={t`seconds`}
                 optionChange={optionChange}
               />
@@ -1006,21 +1001,6 @@ export function SettingsTab() {
                   basic
                   className="no-padding-segment">
                   <ImportPane />
-                </Tab.Pane>
-              ),
-            },
-            {
-              menuItem: {
-                key: 'plugins',
-                icon: 'cubes',
-                content: t`Plugins`,
-              },
-              render: () => (
-                <Tab.Pane
-                  attached={undefined}
-                  basic
-                  className="no-padding-segment">
-                  <PluginsPane />
                 </Tab.Pane>
               ),
             },
@@ -1097,6 +1077,7 @@ export default function SettingsModal({
   ...props
 }: React.ComponentProps<typeof Modal>) {
   const [open, setOpen] = useState(false);
+
   const touched = useRecoilValue(MiscState.touchedConfig);
   const touchedRef = useRef(touched);
 
@@ -1121,7 +1102,7 @@ export default function SettingsModal({
   }, [open]);
 
   return (
-    <Modal
+    <ModalWithBack
       dimmer="inverted"
       closeIcon
       centered={false}
@@ -1146,6 +1127,6 @@ export default function SettingsModal({
       <Modal.Content as={Segment} className="no-margins" basic>
         <SettingsTab />
       </Modal.Content>
-    </Modal>
+    </ModalWithBack>
   );
 }

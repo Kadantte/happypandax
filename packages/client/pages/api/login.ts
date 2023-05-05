@@ -1,12 +1,12 @@
-import { handler } from '../../misc/requests';
-import { ServiceType } from '../../services/constants';
+import { ServiceType } from '../../server/constants';
+import { handler } from '../../server/requests';
 
-export default handler().post(async (req, res) => {
-  const server = global.app.service.get(ServiceType.Server);
+export default handler({ auth: false }).post(async (req, res) => {
+  const server = await global.app.service.get(ServiceType.Server);
 
-  const { username, password, endpoint } = req.body;
+  const { username, password } = req.body;
 
-  return server.login(username, password, endpoint).then(() => {
-    return res.status(200).json({ status: server.logged_in });
+  return server.login(username, password).then((session) => {
+    return res.status(200).json({ session });
   });
 });

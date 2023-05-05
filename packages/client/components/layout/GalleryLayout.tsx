@@ -20,17 +20,19 @@ import {
 
 import { DataContext } from '../../client/context';
 import { useImage, useSetupDataState } from '../../client/hooks/item';
+import { useBreakpoints } from '../../client/hooks/ui';
+import t, { sortIndexName } from '../../client/lang';
 import { QueryType, useQueryType } from '../../client/queries';
-import { ItemSort, ItemType, ViewType } from '../../misc/enums';
-import t, { sortIndexName } from '../../misc/lang';
+import { ItemSort, ItemType, ViewType } from '../../shared/enums';
 import {
   FieldPath,
   ServerFilter,
   ServerGallery,
   ServerSortIndex,
-} from '../../misc/types';
-import { urlstring } from '../../misc/utility';
+} from '../../shared/types';
+import { urlstring } from '../../shared/utility';
 import { AppState } from '../../state';
+import { useGlobalValue } from '../../state/global';
 import {
   ArtistLabels,
   CategoryLabel,
@@ -51,7 +53,7 @@ import {
   UrlList,
 } from '../dataview/Common';
 import { ContinueButton, GalleryMenu } from '../item/Gallery';
-import { PopupNoOverflow } from '../Misc';
+import { PopupNoOverflow } from '../misc';
 import { ItemHeaderParallax, LabelField, LabelFields } from './ItemLayout';
 import styles from './ItemLayout.module.css';
 
@@ -120,7 +122,8 @@ export function SortButtonInput({
           circular
           className={classNames(className)}
         />
-      }>
+      }
+    >
       <Popup.Content>
         <Menu secondary vertical>
           {!!data?.data &&
@@ -228,7 +231,8 @@ export function FilterButtonInput({
           circular
           className={classNames(className)}
         />
-      }>
+      }
+    >
       <Popup.Content>
         <Menu secondary vertical>
           {!!data?.data &&
@@ -350,11 +354,13 @@ export function ViewButtons({
           <Button
             primary
             basic={item === ItemType.Collection}
-            onClick={onCollection}>{t`Collection`}</Button>
+            onClick={onCollection}
+          >{t`Collection`}</Button>
           <Button
             primary
             basic={item === ItemType.Gallery}
-            onClick={onGallery}>{t`Gallery`}</Button>
+            onClick={onGallery}
+          >{t`Gallery`}</Button>
         </>
       )}
     </ButtonGroup>
@@ -427,10 +433,11 @@ export function GalleryItemHeader({
 }: {
   data: GalleryHeaderData;
 }) {
+  const { isMobileMax, isTabletMin } = useBreakpoints();
   const blur = useRecoilValue(AppState.blur);
   const [readingQueue, setReadingQueue] = useRecoilState(AppState.readingQueue);
 
-  const sameMachine = useRecoilValue(AppState.sameMachine);
+  const sameMachine = useGlobalValue('sameMachine');
 
   const { data, dataContext } = useSetupDataState({
     initialData,
@@ -444,6 +451,64 @@ export function GalleryItemHeader({
 
   const inReadingQueue = readingQueue?.includes?.(data?.id);
 
+  const namesTableEl = (
+    <NamesTable dataKey="titles" dataPrimaryKey="preferred_title">
+      <FavoriteLabel
+        defaultRating={data?.metatags?.favorite ? 1 : 0}
+        size="gigantic"
+        className="float-left"
+      />
+      <GalleryMenu
+        hasProgress={hasProgress}
+        read={data?.metatags?.read}
+        trigger={
+          <Icon
+            link
+            size="large"
+            className="float-right"
+            name="ellipsis vertical"
+          />
+        }
+      />
+    </NamesTable>
+  );
+
+  const detailsSegment = (
+    <Segment
+      className={classNames('no-margins', {
+        'no-right-padding': !isMobileMax,
+        'no-padding-segment': isMobileMax,
+      })}
+      basic
+    >
+      {isTabletMin && namesTableEl}
+      <Header textAlign="center">
+        <LastReadLabel timestamp={data?.last_read} />
+        <LastUpdatedLabel timestamp={data?.last_updated} />
+        <DateAddedLabel timestamp={data?.timestamp} />
+      </Header>
+      {data?.info && <InfoSegment fluid />}
+      <Divider hidden className="small" />
+      <LabelFields>
+        <LabelField label={t`Series`} padded={false}>
+          <Label.Group>
+            <GroupingLabel />
+            <StatusLabel>{data?.grouping?.status?.name}</StatusLabel>
+          </Label.Group>
+        </LabelField>
+        <LabelField label={t`Parody`} padded={false}>
+          <ParodyLabels />
+        </LabelField>
+        <LabelField label={t`Tags`} padded={false}>
+          <TagsTable />
+        </LabelField>
+        <LabelField label={t`External links`} padded={false}>
+          <UrlList />
+        </LabelField>
+      </LabelFields>
+    </Segment>
+  );
+
   return (
     <>
       <ItemHeaderParallax data={data} />
@@ -451,7 +516,11 @@ export function GalleryItemHeader({
         <Container>
           <Segment basic className="no-margins no-top-padding no-right-padding">
             <div className={classNames(styles.header_content)}>
-              <div className={styles.cover_column}>
+              <div
+                className={classNames(styles.cover_column, {
+                  [styles.fluid]: isMobileMax,
+                })}
+              >
                 <Image
                   centered
                   rounded
@@ -463,6 +532,7 @@ export function GalleryItemHeader({
                   height={data?.profile?.size?.[1]}
                 />
                 <Divider hidden />
+
                 <Divider fitted horizontal>
                   <Header as="h5">
                     <Button size="mini" basic>
@@ -473,13 +543,15 @@ export function GalleryItemHeader({
                     </Button>
                   </Header>
                 </Divider>
+                {isMobileMax && namesTableEl}
                 <Divider hidden />
                 <Grid>
                   {hasProgress && (
                     <Grid.Row centered textAlign="center">
                       <Button as="div" labelPosition="right">
                         <ContinueButton data={data} size="small">
-                          <Icon className="play" /> {t`Continue`}
+                          <Icon className="play" /> {t`Continue`} 「
+                          {data?.times_read}」
                         </ContinueButton>
                         <Label basic color="orange" pointing="left">
                           {Math.round(data?.progress?.percent)}%
@@ -498,10 +570,12 @@ export function GalleryItemHeader({
                       )}
                       <Link
                         href={urlstring(`/item/gallery/${data?.id}/page/1`)}
-                        passHref>
+                        passHref
+                        legacyBehavior
+                      >
                         <Button as="a" primary>
-                          <Icon className="book open" /> {t`Read`}
-                          {!!data?.times_read && `「${data?.times_read}」`}
+                          <Icon className="book open" /> {t`Read`} 「
+                          {data?.times_read}」
                         </Button>
                       </Link>
                       <Button.Or text={t`Or`} />
@@ -521,7 +595,8 @@ export function GalleryItemHeader({
                           inReadingQueue
                             ? t`Remove from reading queue`
                             : t`Add to reading queue`
-                        }>
+                        }
+                      >
                         <Icon
                           name={
                             inReadingQueue ? 'bookmark' : 'bookmark outline'
@@ -555,53 +630,10 @@ export function GalleryItemHeader({
                       </LabelField>
                     </LabelFields>
                   </Grid.Row>
+                  {isMobileMax && <Grid.Row>{detailsSegment}</Grid.Row>}
                 </Grid>
               </div>
-              <Segment className="no-margins no-right-padding" basic>
-                <NamesTable dataKey="titles" dataPrimaryKey="preferred_title">
-                  <FavoriteLabel
-                    defaultRating={data?.metatags?.favorite ? 1 : 0}
-                    size="gigantic"
-                    className="float-left"
-                  />
-                  <GalleryMenu
-                    hasProgress={hasProgress}
-                    read={data?.metatags?.read}
-                    trigger={
-                      <Icon
-                        link
-                        size="large"
-                        className="float-right"
-                        name="ellipsis vertical"
-                      />
-                    }
-                  />
-                </NamesTable>
-                <Header textAlign="center">
-                  <LastReadLabel timestamp={data?.last_read} />
-                  <LastUpdatedLabel timestamp={data?.last_updated} />
-                  <DateAddedLabel timestamp={data?.timestamp} />
-                </Header>
-                {data?.info && <InfoSegment fluid />}
-                <Divider hidden className="small" />
-                <LabelFields>
-                  <LabelField label={t`Series`} padded={false}>
-                    <Label.Group>
-                      <GroupingLabel />
-                      <StatusLabel>{data?.grouping?.status?.name}</StatusLabel>
-                    </Label.Group>
-                  </LabelField>
-                  <LabelField label={t`Parody`} padded={false}>
-                    <ParodyLabels />
-                  </LabelField>
-                  <LabelField label={t`Tags`} padded={false}>
-                    <TagsTable />
-                  </LabelField>
-                  <LabelField label={t`External links`} padded={false}>
-                    <UrlList />
-                  </LabelField>
-                </LabelFields>
-              </Segment>
+              {isTabletMin && detailsSegment}
             </div>
           </Segment>
         </Container>

@@ -3,10 +3,10 @@ import { Label } from 'semantic-ui-react';
 
 import { DataContext } from '../../client/context';
 import { useSetupDataState } from '../../client/hooks/item';
+import t from '../../client/lang';
 import { QueryType, useQueryType } from '../../client/queries';
-import { ItemType } from '../../misc/enums';
-import t from '../../misc/lang';
-import { ServerGallery } from '../../misc/types';
+import { ItemType } from '../../shared/enums';
+import { ServerGallery } from '../../shared/types';
 import {
   ArtistLabels,
   CategoryLabel,
@@ -96,7 +96,8 @@ export default function GalleryDataTable({
               className="float-left"
               circular
               size="tiny"
-              color="black">
+              color="black"
+            >
               {data?.number}
             </GroupingNumberLabel>
           </NamesTable>

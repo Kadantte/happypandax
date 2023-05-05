@@ -1,21 +1,25 @@
 import Link from 'next/link';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useRecoilValue } from 'recoil';
 import { Button, Icon, Label, Popup } from 'semantic-ui-react';
 
 import { ItemActions } from '../../client/actions/item';
 import { useLibraryContext } from '../../client/context';
-import { useSetupDataState, useUpdateDataState } from '../../client/hooks/item';
-import { ItemType } from '../../misc/enums';
-import t from '../../misc/lang';
+import {
+  useAddToQueue,
+  useSetupDataState,
+  useUpdateDataState,
+} from '../../client/hooks/item';
+import t from '../../client/lang';
+import { ItemType } from '../../shared/enums';
 import {
   FieldPath,
   ItemSize,
   ServerGallery,
   ServerItem,
   ServerItemWithMetatags,
-} from '../../misc/types';
-import { maskText } from '../../misc/utility';
+} from '../../shared/types';
+import { maskText } from '../../shared/utility';
 import { AppState } from '../../state';
 import {
   FavoriteLabel,
@@ -95,7 +99,8 @@ export function ReadButton({
       href={useMemo(() => ({ pathname: `/item/gallery/${data?.id}/page/1` }), [
         data,
       ])}
-      passHref>
+      passHref
+      legacyBehavior>
       <Button
         as="a"
         primary
@@ -127,7 +132,8 @@ export function ContinueButton({
         }),
         [data]
       )}
-      passHref>
+      passHref
+      legacyBehavior>
       <Button as="a" color="orange" size="mini" {...props}>
         <Icon name="play" />
         {t`Continue`}
@@ -178,24 +184,78 @@ export function SendToLibraryButton({
 export function GalleryMenu({
   hasProgress,
   read,
-  trigger,
+  data,
 }: {
   hasProgress: boolean;
   read: boolean;
-  trigger?: React.ComponentProps<typeof ItemMenuLabel>['trigger'];
+  data: DeepPick<GalleryCardData, 'id' | 'progress.page.number'>;
 }) {
+  const [menuOpen, setMenuOpen] = useState(undefined);
+
+  const { toggle: toggleToQueue, exists: existsInQueue } = useAddToQueue({
+    data,
+    itemType: ItemType.Gallery,
+  });
+
   return (
-    <ItemMenuLabel trigger={trigger}>
-      {!hasProgress && (
+    <ItemMenuLabel
+      open={menuOpen}
+      onClose={() => setMenuOpen(false)}
+      onOpen={() => setMenuOpen(true)}>
+      {hasProgress && (
         <>
-          <ItemMenuLabelItem icon="book open">{t`Read`}</ItemMenuLabelItem>
-          <ItemMenuLabelItem icon="book open">{t`Read in new tab`}</ItemMenuLabelItem>
+          <Link
+            href={{
+              pathname: `/item/gallery/${data?.id}/page/${data?.progress?.page?.number}`,
+            }}
+            passHref
+            legacyBehavior>
+            <ItemMenuLabelItem
+              as="a"
+              icon="play">{t`Continue reading`}</ItemMenuLabelItem>
+          </Link>
+          <Link
+            href={{
+              pathname: `/item/gallery/${data?.id}/page/${data?.progress?.page?.number}`,
+            }}
+            passHref
+            legacyBehavior>
+            <ItemMenuLabelItem
+              as="a"
+              target="_blank"
+              icon="play">{t`Continue in new tab`}</ItemMenuLabelItem>
+          </Link>
         </>
       )}
-      {hasProgress && (
-        <ItemMenuLabelItem icon="play">{t`Continue reading`}</ItemMenuLabelItem>
-      )}
-      <ItemMenuLabelItem icon="plus">{t`Add to queue`}</ItemMenuLabelItem>
+      <>
+        <Link
+          href={{ pathname: `/item/gallery/${data?.id}/page/1` }}
+          passHref
+          legacyBehavior>
+          <ItemMenuLabelItem
+            as="a"
+            icon="book open">{t`Read`}</ItemMenuLabelItem>
+        </Link>
+        <Link
+          href={{ pathname: `/item/gallery/${data?.id}/page/1` }}
+          passHref
+          legacyBehavior>
+          <ItemMenuLabelItem
+            as="a"
+            target="_blank"
+            icon="book open">{t`Read in new tab`}</ItemMenuLabelItem>
+        </Link>
+      </>
+      <ItemMenuLabelItem
+        icon={existsInQueue ? 'minus' : 'plus'}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleToQueue();
+          setMenuOpen(false);
+        }}>
+        {existsInQueue ? t`Remove from queue` : t`Add to queue`}
+      </ItemMenuLabelItem>
       <ItemMenuLabelItem icon="pencil">{t`Edit`}</ItemMenuLabelItem>
       <ItemMenuLabelItem icon="exchange">{t`Show activity`}</ItemMenuLabelItem>
       {!read && (
@@ -214,10 +274,12 @@ export function GalleryCard({
   data: initialData,
   fluid,
   loading,
-  hiddenLabel,
-  hiddenAction,
-  activity,
-  activityContent,
+  hideLabel,
+  showMiniActionContent,
+  alternative,
+  horizontalDetailContent,
+  alternativeContent,
+  horizontalDetailPosition,
   actionContent,
   draggable = true,
   disableModal,
@@ -228,11 +290,19 @@ export function GalleryCard({
   size?: ItemSize;
   data: GalleryCardData;
   fluid?: boolean;
-  hiddenLabel?: boolean;
-  hiddenAction?: boolean;
+  hideLabel?: boolean;
+  showMiniActionContent?: boolean;
   loading?: boolean;
-  activity?: boolean;
-  activityContent?: React.ReactNode;
+  alternative?: boolean;
+  horizontalDetailContent?: React.ComponentProps<
+    typeof ItemCard
+  >['horizontalDetailContent'];
+  horizontalDetailPosition?: React.ComponentProps<
+    typeof ItemCard
+  >['horizontalDetailPosition'];
+  alternativeContent?: React.ComponentProps<
+    typeof ItemCard
+  >['alternativeContent'];
   actionContent?: React.ComponentProps<typeof ItemCard>['actionContent'];
   draggable?: boolean;
   disableModal?: boolean;
@@ -245,6 +315,8 @@ export function GalleryCard({
     itemType: ItemType.Gallery,
     key: '_gallery',
   });
+
+  const ref = useRef<HTMLDivElement>(null);
 
   const isLibraryCtx = useLibraryContext();
 
@@ -285,17 +357,20 @@ export function GalleryCard({
 
   return (
     <ItemCard
+      ref={ref}
       type={ItemType.Gallery}
       dataContext={dataContext}
       href={`/item/gallery/${data.id}`}
       dragData={data}
       draggable={draggable}
       centered
-      hiddenLabel={hiddenLabel}
-      hiddenAction={hiddenAction}
+      hideLabel={hideLabel}
+      showMiniActionContent={showMiniActionContent}
       loading={loading}
-      activity={activity}
-      activityContent={activityContent}
+      alternative={alternative}
+      horizontalDetailContent={horizontalDetailContent}
+      horizontalDetailPosition={horizontalDetailPosition}
+      alternativeContent={alternativeContent}
       link
       fluid={fluid}
       horizontal={horizontal}
@@ -328,7 +403,11 @@ export function GalleryCard({
                 {data?.number}
               </GroupingNumberLabel>
             )}
-            <ActivityLabel />
+            <ActivityLabel
+              data={data}
+              type={ItemType.Gallery}
+              parentRef={ref}
+            />
           </ItemLabel>,
           <ItemLabel key="info" x="right" y="bottom">
             {horizontal && (
@@ -362,6 +441,7 @@ export function GalleryCard({
               <TranslucentLabel circular>{data?.page_count}</TranslucentLabel>
             )}
             <GalleryMenu
+              data={data}
               hasProgress={hasProgress}
               read={data?.metatags?.read}
             />

@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import {
   createContext,
+  forwardRef,
   useCallback,
   useContext,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
 } from 'react';
@@ -24,9 +26,10 @@ import {
   SemanticICONS,
 } from 'semantic-ui-react/dist/commonjs/generic';
 
+import { useBreakpoints, useHijackHistory } from '../client/hooks/ui';
 import { useDocumentEvent } from '../client/hooks/utils';
-import t from '../misc/lang';
-import { urlparse } from '../misc/utility';
+import t from '../client/lang';
+import { urlparse } from '../shared/utility';
 import { AppState, useInitialRecoilState } from '../state/index';
 import AboutModal from './About';
 import SettingsModal from './Settings';
@@ -86,7 +89,7 @@ function SidebarItem({
   );
 
   return href ? (
-    <Link href={href} passHref>
+    <Link href={href} passHref legacyBehavior>
       {menuItem}
     </Link>
   ) : (
@@ -95,11 +98,15 @@ function SidebarItem({
 }
 
 export function MainSidebar({
-  hiiden: hidden,
+  hidden,
   fixed = true,
+  direction,
   onlyIcons,
+  onHide,
 }: {
-  hiiden?: boolean;
+  hidden?: boolean;
+  direction?: 'left' | 'right';
+  onHide?: () => void;
   fixed?: boolean;
   onlyIcons?: boolean;
 }) {
@@ -134,6 +141,7 @@ export function MainSidebar({
       as={Menu}
       animation={animation}
       vertical
+      direction={direction}
       size="small"
       inverted={inverted}
       icon={iconOnly}
@@ -141,6 +149,9 @@ export function MainSidebar({
       className={classNames('overflow-unset', 'window-height', {
         fixed: fixed,
       })}
+      onHide={useCallback(() => {
+        onHide?.();
+      }, [onHide])}
       onMouseEnter={useCallback(() => {
         if (!onlyIcons) setIconOnly(false);
       }, [onlyIcons])}
@@ -165,9 +176,9 @@ export function MainSidebar({
           </div>
           <div className="middle-aligned">
             <SidebarItem
-              href="/favorites"
+              href="/dashboard"
               icon={{ name: 'heart', color: 'red' }} // <-- use React.memo
-            >{t`Favorites`}</SidebarItem>
+            >{t`Dashboard`}</SidebarItem>
             <SidebarItem
               href="/library"
               icon={'grid layout'}>{t`Library`}</SidebarItem>
@@ -179,6 +190,9 @@ export function MainSidebar({
               icon={'cubes'}>{t`Management`}</SidebarItem>
           </div>
           <div className="bottom-aligned">
+            <SidebarItem
+              href="/profile"
+              icon={'user alternate'}>{t`Profile`}</SidebarItem>
             <SettingsModal
               trigger={
                 <SidebarItem icon={'settings'}>{t`Preferences`}</SidebarItem>
@@ -196,45 +210,69 @@ export function MainSidebar({
 
 export default MainSidebar;
 
-function mainMenuProps() {
-  const fixedEl: HTMLDivElement = document.querySelector('.main-menu.fixed');
+function mainMenuProps(selector = '.main-menu') {
+  const fixedEl: HTMLDivElement = document.querySelector(`${selector}.fixed`);
   const r = {
     height: fixedEl?.offsetHeight ?? 0,
+    bottom: fixedEl?.getBoundingClientRect?.()?.bottom ?? 0,
     fixed: !!fixedEl,
   };
 
   if (!r.fixed) {
-    const el: HTMLDivElement = document.querySelector('.main-menu:not(.fixed)');
-    if (el.offsetHeight) {
+    const el: HTMLDivElement = document.querySelector(
+      `${selector}:not(.fixed)`
+    );
+    if (el?.offsetHeight) {
       r.height = el.offsetHeight;
+    }
+
+    if (el?.getBoundingClientRect?.()?.bottom) {
+      r.bottom = el.getBoundingClientRect().bottom;
     }
   }
   return r;
 }
 
-export function StickySidebar({
-  visible,
-  ...props
-}: {
-  visible?: boolean;
-} & React.ComponentProps<typeof Sidebar>) {
+export const StickySidebar = forwardRef(function StickySidebar(
+  {
+    visible,
+    menuSelector = '.main-menu',
+    ...props
+  }: {
+    visible?: boolean;
+    menuSelector?: string;
+  } & React.ComponentProps<typeof Sidebar>,
+  fref
+) {
   const ref = useRef<HTMLDivElement>();
+
+  const { isMobileMax } = useBreakpoints();
+
+  useImperativeHandle(fref, () => ref.current);
 
   const computeTop = useCallback(() => {
     if (visible) {
-      const mh = mainMenuProps();
-      const t = Math.max(0, window.scrollY + (mh.fixed ? 0 : -mh.height));
+      const mh = mainMenuProps(menuSelector);
+      const margin = 5;
+      const t = Math.max(0, mh.height + margin);
       ref.current.style.top = `${t}px`;
       if (mh.height && (mh.fixed || !t)) {
-        ref.current.style.setProperty('max-height', '94.5vh', 'important');
+        ref.current.style.setProperty(
+          'max-height',
+          `calc(100% - ${t + margin}px)`,
+          'important'
+        );
       } else {
-        ref.current.style.setProperty('max-height', '98vh', 'important');
+        ref.current.style.setProperty(
+          'max-height',
+          `calc(100% - ${t + margin}px)`,
+          'important'
+        );
       }
     }
-  }, [visible]);
+  }, [visible, menuSelector]);
 
   useEffect(() => {
-    ref.current.style.setProperty('max-height', '98vh', 'important');
     ref.current.style.paddingRight = `calc(${
       window.innerWidth - document.body.offsetWidth
     }px + ${ref.current.style.paddingRight ?? 0})`;
@@ -246,11 +284,16 @@ export function StickySidebar({
 
   useDocumentEvent('scroll', computeTop, { passive: true }, [computeTop]);
 
+  useHijackHistory(visible);
+
   return (
     <Ref innerRef={ref}>
       <Sidebar
         as={Segment}
-        size="very wide"
+        size={classNames({
+          'very wide': !isMobileMax,
+          wide: isMobileMax,
+        })}
         animation="overlay"
         {...props}
         visible={visible}
@@ -258,4 +301,4 @@ export function StickySidebar({
       />
     </Ref>
   );
-}
+});

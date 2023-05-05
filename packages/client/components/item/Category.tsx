@@ -2,9 +2,11 @@ import classNames from 'classnames';
 import Link from 'next/link';
 import { Card, Icon, Label, Segment } from 'semantic-ui-react';
 
-import t from '../../misc/lang';
-import { FieldPath, ServerCategory } from '../../misc/types';
-import { urlstring } from '../../misc/utility';
+import t from '../../client/lang';
+import { getLibraryQuery } from '../../client/utility';
+import { ViewType } from '../../shared/enums';
+import { FieldPath, ServerCategory } from '../../shared/types';
+import { urlstring } from '../../shared/utility';
 
 export type CategoryCardLabelData = DeepPick<ServerCategory, 'id' | 'name'>;
 
@@ -24,7 +26,8 @@ export default function CategoryCardLabel({
       as={Segment}
       size="tiny"
       color="black"
-      className={classNames('default-card', props.className)}>
+      className={classNames('default-card', props.className)}
+    >
       <Card.Content>
         <Label size="mini" className="right">
           {t`ID`}
@@ -32,9 +35,16 @@ export default function CategoryCardLabel({
         </Label>
         <Link
           href={urlstring('/library', {
-            q: `category:"${data.name}"`,
+            ...getLibraryQuery({
+              query: `category:"${data.name}"`,
+              view: ViewType.All,
+              favorites: false,
+              filter: 0,
+            }),
           })}
-          passHref>
+          passHref
+          legacyBehavior
+        >
           <Label
             size="small"
             empty

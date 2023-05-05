@@ -1,15 +1,85 @@
 const { merge } = require('webpack-merge');
-const withTM = require('next-transpile-modules')([]);
-const { PHASE_DEVELOPMENT_SERVER } = require('next/constants');
+const pkg = require('./package.json');
 
-module.exports = (phase, { defaultConfig }) => {
+const nextConfig = (phase, { defaultConfig }) => {
+  /** @type {import('next').NextConfig} */
   const config = {
-    ...defaultConfig,
+    // output: phase === PHASE_PRODUCTION_BUILD ? 'standalone' : undefined,
     poweredByHeader: false,
+    env: {
+      PACKAGE_JSON: JSON.stringify(pkg),
+    },
     swcMinify: true,
+    experimental: {
+      appDir: false,
+    },
+    transpilePackages: [
+      '@tanstack/query-core',
+      '@tanstack/react-query',
+      '@tanstack/react-query-devtools',
+      'next-connect',
+      'axios',
+      'swiper',
+      'ssr-window',
+      'file-type',
+      'strtok3',
+      'peek-readable',
+      'token-types',
+      '@tiptap/core',
+      '@tiptap/extension-blockquote',
+      '@tiptap/extension-bold',
+      '@tiptap/extension-bubble-menu',
+      '@tiptap/extension-bullet-list',
+      '@tiptap/extension-code',
+      '@tiptap/extension-code-block',
+      '@tiptap/extension-document',
+      '@tiptap/extension-dropcursor',
+      '@tiptap/extension-floating-menu',
+      '@tiptap/extension-gapcursor',
+      '@tiptap/extension-hard-break',
+      '@tiptap/extension-heading',
+      '@tiptap/extension-highlight',
+      '@tiptap/extension-history',
+      '@tiptap/extension-horizontal-rule',
+      '@tiptap/extension-italic',
+      '@tiptap/extension-list-item',
+      '@tiptap/extension-ordered-list',
+      '@tiptap/extension-paragraph',
+      '@tiptap/extension-placeholder',
+      '@tiptap/extension-strike',
+      '@tiptap/extension-text',
+      '@tiptap/extension-typography',
+      '@tiptap/pm',
+      '@tiptap/react',
+      '@tiptap/starter-kit',
+      'prosemirror-changeset',
+      'prosemirror-collab',
+      'prosemirror-commands',
+      'prosemirror-dropcursor',
+      'prosemirror-gapcursor',
+      'prosemirror-history',
+      'prosemirror-inputrules',
+      'prosemirror-keymap',
+      'prosemirror-markdown',
+      'prosemirror-menu',
+      'prosemirror-model',
+      'prosemirror-schema-basic',
+      'prosemirror-schema-list',
+      'prosemirror-state',
+      'prosemirror-tables',
+      'prosemirror-trailing-node',
+      'prosemirror-transform',
+      'prosemirror-view',
+      'orderedmap',
+      'w3c-keyname',
+      'rope-sequence',
+      'markdown-it',
+      'crelt',
+    ],
     typescript: {
       ignoreBuildErrors: true,
     },
+    images: {},
     webpack: (wconfig, options) => {
       let cfg = {
         experiments: {
@@ -39,19 +109,7 @@ module.exports = (phase, { defaultConfig }) => {
     },
   };
 
-  function plugins(cfg) {
-    return withTM(cfg);
-  }
-
-  if (phase === PHASE_DEVELOPMENT_SERVER) {
-    return plugins({
-      ...config,
-      /* development only config options here */
-    });
-  }
-
-  return plugins({
-    ...config,
-    /* config options for all phases except development here */
-  });
+  return config;
 };
+
+module.exports = nextConfig;
